@@ -1,0 +1,1327 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// PHASE 1: FOUNDATION & MULTI-TENANCY
+// ============================================
+
+/// Academy represents the tenant/organization account
+/// All data belongs to exactly one academy - this is the multi-tenancy boundary
+model Academy {
+  id              String   @id @default(cuid())
+  name            String
+  subdomain      String   @unique
+  logoUrl        String?  @map("logo_url")
+  primaryColor   String   @default("#059669") @map("primary_color")
+  secondaryColor String?  @map("secondary_color")
+  timezone       String   @default("UTC")
+  contactEmail   String   @map("contact_email")
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedByUserId String? @map("deleted_by_user_id")
+  deletedBy      User?    @relation("AcademyDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
+  
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  users          User[]
+  courses        Course[]
+  classes        Class[]
+  feePlans       FeePlan[]
+  payrollSettings AcademyPayrollSettings?
+  staffCompensationProfiles StaffCompensationProfile[]
+  payrollRecords PayrollRecord[]
+  paymentSettings AcademyPaymentSettings?
+  manualPaymentSubmissions ManualPaymentSubmission[]
+  exams           Exam[]
+  
+  @@index([isDeleted, deletedAt])
+  @@map("academies")
+}
+
+/// User handles authentication and common identity for all roles
+/// Role-specific profiles will be added in Phase 2
+model User {
+  id              String   @id @default(cuid())
+  email           String
+  passwordHash    String   @map("password_hash")
+  role            Role
+  firstName       String   @map("first_name")
+  lastName        String   @map("last_name")
+  phone           String?  @map("phone")
+  avatarUrl       String?  @map("avatar_url")
+  isActive        Boolean  @default(true) @map("is_active")
+  isAcademyOwner  Boolean  @default(false) @map("is_academy_owner")
+  
+  academyId       String   @map("academy_id")
+  academy         Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  teacherProfile  TeacherProfile?
+  studentProfile  StudentProfile?
+  parentProfile   ParentProfile?
+  compensationProfile StaffCompensationProfile? @relation("StaffCompensationUser")
+  createdInvoices Invoice[] @relation("InvoiceCreator")
+  recordedPayments Payment[] @relation("PaymentRecorder")
+  createdInvoiceAdjustments InvoiceAdjustment[] @relation("InvoiceAdjustmentCreator")
+  createdCompensationProfiles StaffCompensationProfile[] @relation("StaffCompensationCreator")
+  updatedCompensationProfiles StaffCompensationProfile[] @relation("StaffCompensationUpdater")
+  payrollRecords PayrollRecord[] @relation("PayrollRecordUser")
+  createdPayrollRecords PayrollRecord[] @relation("PayrollRecordCreator")
+  updatedPayrollRecords PayrollRecord[] @relation("PayrollRecordUpdater")
+  finalizedPayrollRecords PayrollRecord[] @relation("PayrollRecordFinalizer")
+  createdPayrollAdjustments PayrollAdjustment[] @relation("PayrollAdjustmentCreator")
+  updatedPayrollAdjustments PayrollAdjustment[] @relation("PayrollAdjustmentUpdater")
+  createdExams     Exam[]             @relation("ExamCreator")
+  uploadedResultFiles ResultFile[]    @relation("ResultFileUploader")
+  uploadedReportAttachments ReportAttachment[]
+  notifications   Notification[]
+  posts           Post[]
+  comments        Comment[]
+  postRecipients  PostRecipient[]
+  postReactions   PostReaction[]
+  postViews       PostView[]
+  emailLogs       EmailLog[]
+  manualPaymentSubmissions ManualPaymentSubmission[] @relation("ManualPaymentSubmitter")
+  reviewedManualPaymentSubmissions ManualPaymentSubmission[] @relation("ManualPaymentReviewer")
+  deletedAcademies Academy[] @relation("AcademyDeletedBy")
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  @@unique([email, academyId])
+  @@index([academyId, role])
+  @@map("users")
+}
+
+enum Role {
+  admin
+  teacher
+  student
+  parent
+}
+
+// ============================================
+// PHASE 2: USER FACTORY (Role-Specific Profiles)
+// ============================================
+model TeacherProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique @map("user_id")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  employeeId        String?  @unique @map("employee_id")
+  qualification     String?
+  specialization    String?
+  joiningDate       DateTime @default(now()) @map("joining_date")
+  bio               String?
+  maxWeeklyHours    Int?     @map("max_weekly_hours")
+  
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  classesTaught     ClassTeacher[]
+  materials         Material[]
+  attendances       Attendance[]
+  sessionJoins      TeacherSessionJoin[]
+  reports           Report[]
+  
+  @@map("teacher_profiles")
+}
+
+model StudentProfile {
+  id                    String   @id @default(cuid())
+  userId                String   @unique @map("user_id")
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  studentId             String   @unique @map("student_id")
+  dateOfBirth           DateTime @map("date_of_birth")
+  gradeLevel            String   @map("grade_level")
+  enrollmentDate        DateTime @default(now()) @map("enrollment_date")
+  medicalNotes          String?  @map("medical_notes")
+  emergencyContactName  String   @map("emergency_contact_name")
+  emergencyContactPhone String   @map("emergency_contact_phone")
+  
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  parentLinks           ParentStudentLink[]
+  enrollments           Enrollment[]
+  attendances           Attendance[]
+  materialVisibility    MaterialVisibility[]
+  reports               Report[]
+  invoices              Invoice[]
+  examResults           ExamResult[]
+  resultFiles           ResultFile[]
+  
+  @@map("student_profiles")
+}
+
+model ParentProfile {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique @map("user_id")
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  occupation             String?
+  preferredContactMethod ContactMethod @default(email) @map("preferred_contact_method")
+  isPrimaryContact       Boolean  @default(false) @map("is_primary_contact")
+  
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  studentLinks           ParentStudentLink[]
+  
+  @@map("parent_profiles")
+}
+
+enum ContactMethod {
+  email
+  phone
+  sms
+}
+
+model ParentStudentLink {
+  id                  String   @id @default(cuid())
+  
+  parentProfileId     String   @map("parent_profile_id")
+  parentProfile       ParentProfile @relation(fields: [parentProfileId], references: [id], onDelete: Cascade)
+  
+  studentProfileId    String   @map("student_profile_id")
+  studentProfile      StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  
+  relationshipType    RelationshipType @map("relationship_type")
+  canPickup           Boolean  @default(false) @map("can_pickup")
+  isEmergencyContact  Boolean  @default(false) @map("is_emergency_contact")
+  isPrimaryForStudent Boolean  @default(false) @map("is_primary_for_student")
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+  
+  @@unique([parentProfileId, studentProfileId])
+  @@index([studentProfileId])
+  @@map("parent_student_links")
+}
+
+enum RelationshipType {
+  father
+  mother
+  guardian
+  grandparent
+  other
+}
+
+// ============================================
+// PHASE 3: ACADEMIC STRUCTURE
+// ============================================
+model Course {
+  id          String   @id @default(cuid())
+  academyId   String   @map("academy_id")
+  academy     Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  code        String
+  name        String
+  description String?
+  syllabusPdfUrl String? @map("syllabus_pdf_url")
+  syllabusImageUrl String? @map("syllabus_image_url")
+  gradeLevel  String   @map("grade_level")
+  subjectArea String   @map("subject_area")
+  isActive    Boolean  @default(true) @map("is_active")
+
+  classes     Class[]
+  exams       Exam[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([academyId, code])
+  @@index([academyId, gradeLevel, isActive])
+  @@map("courses")
+}
+
+model Class {
+  id            String      @id @default(cuid())
+  academyId     String      @map("academy_id")
+  academy       Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  courseId      String      @map("course_id")
+  course        Course      @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  name          String
+  section       String?
+  academicYear  String      @map("academic_year")
+  status        ClassStatus @default(active)
+  startDate     DateTime    @map("start_date")
+  endDate       DateTime    @map("end_date")
+  scheduleDays  ClassWeekday[] @default([]) @map("schedule_days")
+  scheduleStartTime String? @map("schedule_start_time")
+  scheduleEndTime String? @map("schedule_end_time")
+  scheduleRecurrence ClassRecurrencePattern @default(weekly) @map("schedule_recurrence")
+
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  teachers      ClassTeacher[]
+  enrollments   Enrollment[]
+  sessions      ClassSession[]
+  materials     Material[]
+  feeAssignments ClassFeeAssignment[]
+  invoices      Invoice[]
+  reports       Report[]
+  posts         Post[]
+  exams         Exam[]
+
+  @@index([academyId])
+  @@index([courseId])
+  @@index([status])
+  @@map("classes")
+}
+
+model ClassTeacher {
+  id               String       @id @default(cuid())
+  classId          String       @map("class_id")
+  class            Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  teacherProfileId String       @map("teacher_profile_id")
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  role             TeacherRole  @default(primary)
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  @@unique([classId, teacherProfileId])
+  @@index([teacherProfileId])
+  @@map("class_teachers")
+}
+
+model Enrollment {
+  id               String           @id @default(cuid())
+  classId          String           @map("class_id")
+  class            Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  studentProfileId String           @map("student_profile_id")
+  studentProfile   StudentProfile   @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  status           EnrollmentStatus @default(active)
+  enrolledAt       DateTime         @default(now()) @map("enrolled_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@unique([studentProfileId, classId])
+  @@index([classId, status])
+  @@index([studentProfileId, status])
+  @@map("enrollments")
+}
+
+enum ClassStatus {
+  active
+  completed
+  cancelled
+}
+
+enum TeacherRole {
+  primary
+  assistant
+}
+
+enum EnrollmentStatus {
+  active
+  dropped
+  completed
+}
+
+enum ClassWeekday {
+  monday
+  tuesday
+  wednesday
+  thursday
+  friday
+  saturday
+  sunday
+}
+
+enum ClassRecurrencePattern {
+  weekly
+  custom
+}
+
+// ============================================
+// PHASE 4: ATTENDANCE SYSTEM
+// ============================================
+model ClassSession {
+  id              String          @id @default(cuid())
+
+  classId         String          @map("class_id")
+  class           Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  title           String?
+  sessionDate     DateTime        @map("session_date")
+  startTime       DateTime        @map("start_time")
+  endTime         DateTime        @map("end_time")
+  meetingLink     String?         @map("meeting_link")
+  meetingPlatform MeetingPlatform @default(in_person) @map("meeting_platform")
+  status          SessionStatus   @default(scheduled)
+  recordingUrl    String?         @map("recording_url")
+
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  attendances     Attendance[]
+  teacherJoins    TeacherSessionJoin[]
+  materials       Material[]
+
+  @@index([classId, sessionDate])
+  @@index([status])
+  @@map("class_sessions")
+}
+
+model TeacherSessionJoin {
+  id               String            @id @default(cuid())
+
+  classSessionId   String            @map("class_session_id")
+  classSession     ClassSession      @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+
+  teacherProfileId String            @map("teacher_profile_id")
+  teacherProfile   TeacherProfile    @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  joinTime         DateTime          @map("join_time")
+  status           SessionJoinStatus @default(on_time)
+  lateMinutes      Int               @default(0) @map("late_minutes")
+
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  @@unique([classSessionId, teacherProfileId])
+  @@index([teacherProfileId, joinTime])
+  @@map("teacher_session_joins")
+}
+
+enum SessionJoinStatus {
+  on_time
+  late
+}
+
+enum MeetingPlatform {
+  zoom
+  google_meet
+  teams
+  in_person
+}
+
+enum SessionStatus {
+  scheduled
+  ongoing
+  completed
+  cancelled
+}
+
+model Attendance {
+  id                String           @id @default(cuid())
+
+  classSessionId    String           @map("class_session_id")
+  classSession      ClassSession     @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+
+  studentProfileId  String           @map("student_profile_id")
+  studentProfile    StudentProfile   @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  status            AttendanceStatus @default(present)
+  joinTime          DateTime?        @map("join_time")
+  leaveTime         DateTime?        @map("leave_time")
+  lateMinutes       Int?             @map("late_minutes")
+
+  markedByTeacherId String?          @map("marked_by_teacher_id")
+  markedByTeacher   TeacherProfile?  @relation(fields: [markedByTeacherId], references: [id], onDelete: SetNull)
+
+  notes             String?
+  markedAt          DateTime         @default(now()) @map("marked_at")
+
+  @@unique([classSessionId, studentProfileId])
+  @@index([studentProfileId, status])
+  @@map("attendances")
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
+  excused
+}
+
+model Material {
+  id                  String          @id @default(cuid())
+
+  classId             String          @map("class_id")
+  class               Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  classSessionId      String?         @map("class_session_id")
+  classSession        ClassSession?   @relation(fields: [classSessionId], references: [id], onDelete: SetNull)
+
+  teacherProfileId    String          @map("teacher_profile_id")
+  teacherProfile      TeacherProfile  @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  title               String
+  description         String?
+  contentType         ContentType     @map("content_type")
+  fileUrl             String?         @map("file_url")
+  fileSize            Int?            @map("file_size")
+  isPublished         Boolean         @default(false) @map("is_published")
+  publishedAt         DateTime?       @map("published_at")
+  visibility          VisibilityType  @default(all_students)
+  requiresSubmission  Boolean         @default(false) @map("requires_submission")
+  submissionDeadline  DateTime?       @map("submission_deadline")
+
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  visibilityOverrides MaterialVisibility[]
+  attachments         Attachment[]
+
+  @@index([classId, isPublished])
+  @@index([teacherProfileId])
+  @@map("materials")
+}
+
+enum ContentType {
+  pdf
+  video
+  link
+  text
+  assignment
+}
+
+enum VisibilityType {
+  all_students
+  selected_students
+}
+
+model MaterialVisibility {
+  id                String         @id @default(cuid())
+
+  materialId        String         @map("material_id")
+  material          Material       @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  studentProfileId  String         @map("student_profile_id")
+  studentProfile    StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  @@unique([materialId, studentProfileId])
+  @@map("material_visibility")
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  materialId  String   @map("material_id")
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  fileName    String   @map("file_name")
+  fileUrl     String   @map("file_url")
+  fileSize    Int?     @map("file_size")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([materialId])
+  @@map("attachments")
+}
+
+// ============================================
+// PHASE 5: FINANCE SYSTEM
+// ============================================
+model FeePlan {
+  id               String           @id @default(cuid())
+  academyId        String           @map("academy_id")
+  academy          Academy          @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  name             String
+  description      String?
+  amount           Decimal          @db.Decimal(10, 2)
+  currency         String           @default("USD")
+  frequency        FeeFrequency
+  dueDayOfMonth    Int?             @map("due_day_of_month")
+  lateFeeAmount    Decimal?         @db.Decimal(10, 2) @map("late_fee_amount")
+  lateFeeType      LateFeeType?     @map("late_fee_type")
+  isActive         Boolean          @default(true) @map("is_active")
+
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  classAssignments ClassFeeAssignment[]
+  invoices         Invoice[]
+
+  @@index([academyId, isActive])
+  @@map("fee_plans")
+}
+
+enum FeeFrequency {
+  one_time
+  monthly
+  term
+  yearly
+}
+
+enum LateFeeType {
+  fixed
+  percentage
+}
+
+model ClassFeeAssignment {
+  id             String    @id @default(cuid())
+
+  classId        String    @map("class_id")
+  class          Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  feePlanId      String    @map("fee_plan_id")
+  feePlan        FeePlan   @relation(fields: [feePlanId], references: [id], onDelete: Cascade)
+
+  customAmount   Decimal?  @db.Decimal(10, 2) @map("custom_amount")
+  effectiveFrom  DateTime  @default(now()) @map("effective_from")
+  effectiveUntil DateTime? @map("effective_until")
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@unique([classId, feePlanId, effectiveFrom])
+  @@index([classId])
+  @@index([feePlanId])
+  @@map("class_fee_assignments")
+}
+
+model Invoice {
+  id               String          @id @default(cuid())
+
+  studentProfileId String          @map("student_profile_id")
+  studentProfile   StudentProfile  @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  classId          String?         @map("class_id")
+  class            Class?          @relation(fields: [classId], references: [id], onDelete: SetNull)
+
+  feePlanId        String?         @map("fee_plan_id")
+  feePlan          FeePlan?        @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+
+  invoiceCategory  InvoiceCategory @map("invoice_category")
+  invoiceNumber    String          @unique @map("invoice_number")
+  description      String
+  amount           Decimal         @db.Decimal(10, 2)
+  taxAmount        Decimal         @default(0) @db.Decimal(10, 2) @map("tax_amount")
+  totalAmount      Decimal         @db.Decimal(10, 2) @map("total_amount")
+  currency         String          @default("USD")
+
+  dueDate          DateTime        @map("due_date")
+  status           InvoiceStatus   @default(draft)
+
+  issuedAt         DateTime        @default(now()) @map("issued_at")
+  paidAt           DateTime?       @map("paid_at")
+  pdfUrl           String?         @map("pdf_url")
+  paymentMethod    String?         @map("payment_method")
+  transactionId    String?         @map("transaction_id")
+  notes            String?
+
+  createdByUserId  String          @map("created_by_user_id")
+  createdBy        User            @relation("InvoiceCreator", fields: [createdByUserId], references: [id])
+
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  payments         Payment[]
+  adjustments      InvoiceAdjustment[]
+  manualPaymentSubmissions ManualPaymentSubmission[]
+
+  @@index([studentProfileId, status])
+  @@index([dueDate, status])
+  @@index([classId])
+  @@index([invoiceNumber])
+  @@index([status])
+  @@map("invoices")
+}
+
+enum InvoiceCategory {
+  tuition
+  registration
+  material
+  transport
+  activity
+  other
+}
+
+enum InvoiceStatus {
+  draft
+  sent
+  partial
+  paid
+  overdue
+  waived
+}
+
+model Payment {
+  id                   String         @id @default(cuid())
+
+  invoiceId            String         @map("invoice_id")
+  invoice              Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  amount               Decimal        @db.Decimal(10, 2)
+  currency             String         @default("USD")
+  paymentMethod        PaymentMethod  @map("payment_method")
+  transactionReference String?        @map("transaction_reference")
+  paymentDate          DateTime       @default(now()) @map("payment_date")
+  status               PaymentStatus  @default(pending)
+  receiptUrl           String?        @map("receipt_url")
+  notes                String?
+
+  recordedByUserId     String         @map("recorded_by_user_id")
+  recordedBy           User           @relation("PaymentRecorder", fields: [recordedByUserId], references: [id])
+
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  @@index([invoiceId])
+  @@index([paymentDate])
+  @@index([status])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  cash
+  card
+  bank_transfer
+  online
+  manual
+  jazzcash
+  easypaisa
+  other
+}
+
+model StaffCompensationProfile {
+  id                    String   @id @default(cuid())
+
+  academyId             String   @map("academy_id")
+  academy               Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  userId                String   @unique @map("user_id")
+  user                  User     @relation("StaffCompensationUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  amount                Decimal  @db.Decimal(10, 2)
+  currency              String   @default("USD")
+  effectiveFrom         DateTime @default(now()) @map("effective_from")
+  notes                 String?
+  isActive              Boolean  @default(true) @map("is_active")
+
+  createdByUserId       String   @map("created_by_user_id")
+  createdBy             User     @relation("StaffCompensationCreator", fields: [createdByUserId], references: [id])
+
+  updatedByUserId       String?  @map("updated_by_user_id")
+  updatedBy             User?    @relation("StaffCompensationUpdater", fields: [updatedByUserId], references: [id])
+
+  payrollRecords        PayrollRecord[]
+
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([academyId, isActive])
+  @@index([userId, isActive])
+  @@map("staff_compensation_profiles")
+}
+
+enum PayrollStatus {
+  pending
+  partial
+  paid
+}
+
+enum PayrollRuleMode {
+  fixed_amount
+  percentage
+}
+
+enum PayrollAdjustmentType {
+  bonus
+  deduction
+  advance_adjustment
+}
+
+enum PayrollAdjustmentSource {
+  late_join
+  absence
+  overtime
+  manual
+  advance
+}
+
+model AcademyPayrollSettings {
+  id                         String          @id @default(cuid())
+  academyId                  String          @unique @map("academy_id")
+  academy                    Academy         @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  autoApplyLateDeductions    Boolean         @default(true) @map("auto_apply_late_deductions")
+  lateGraceMinutes           Int             @default(4) @map("late_grace_minutes")
+  lateDeductionMode          PayrollRuleMode @default(fixed_amount) @map("late_deduction_mode")
+  lateDeductionValue         Decimal         @default(0) @db.Decimal(10, 2) @map("late_deduction_value")
+  autoApplyAbsenceDeductions Boolean         @default(true) @map("auto_apply_absence_deductions")
+  absenceDeductionMode       PayrollRuleMode @default(fixed_amount) @map("absence_deduction_mode")
+  absenceDeductionValue      Decimal         @default(0) @db.Decimal(10, 2) @map("absence_deduction_value")
+  createdAt                  DateTime        @default(now()) @map("created_at")
+  updatedAt                  DateTime        @updatedAt @map("updated_at")
+
+  @@map("academy_payroll_settings")
+}
+
+model PayrollRecord {
+  id                         String                  @id @default(cuid())
+
+  academyId                  String                  @map("academy_id")
+  academy                    Academy                 @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  staffCompensationProfileId String                  @map("staff_compensation_profile_id")
+  staffCompensationProfile   StaffCompensationProfile @relation(fields: [staffCompensationProfileId], references: [id], onDelete: Cascade)
+
+  userId                     String                  @map("user_id")
+  user                       User                    @relation("PayrollRecordUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  role                       Role
+  payYear                    Int                     @map("pay_year")
+  payMonth                   Int                     @map("pay_month")
+  grossAmount                Decimal                 @db.Decimal(10, 2) @map("gross_amount")
+  paidAmount                 Decimal                 @default(0) @db.Decimal(10, 2) @map("paid_amount")
+  currency                   String                  @default("USD")
+  status                     PayrollStatus           @default(pending)
+  paymentDate                DateTime?               @map("payment_date")
+  salarySlipUrl              String?                 @map("salary_slip_url")
+  isFinalized                Boolean                 @default(false) @map("is_finalized")
+  finalizedAt                DateTime?               @map("finalized_at")
+  finalizedByUserId          String?                 @map("finalized_by_user_id")
+  finalizedBy                User?                   @relation("PayrollRecordFinalizer", fields: [finalizedByUserId], references: [id])
+  notes                      String?
+
+  createdByUserId            String                  @map("created_by_user_id")
+  createdBy                  User                    @relation("PayrollRecordCreator", fields: [createdByUserId], references: [id])
+
+  updatedByUserId            String?                 @map("updated_by_user_id")
+  updatedBy                  User?                   @relation("PayrollRecordUpdater", fields: [updatedByUserId], references: [id])
+  adjustments                PayrollAdjustment[]
+
+  createdAt                  DateTime                @default(now()) @map("created_at")
+  updatedAt                  DateTime                @updatedAt @map("updated_at")
+
+  @@unique([academyId, userId, payYear, payMonth])
+  @@index([academyId, status, payYear, payMonth])
+  @@index([academyId, isFinalized, payYear, payMonth])
+  @@index([userId, payYear, payMonth])
+  @@map("payroll_records")
+}
+
+model PayrollAdjustment {
+  id              String                  @id @default(cuid())
+  payrollRecordId String                  @map("payroll_record_id")
+  payrollRecord   PayrollRecord           @relation(fields: [payrollRecordId], references: [id], onDelete: Cascade)
+  type            PayrollAdjustmentType
+  source          PayrollAdjustmentSource @default(manual)
+  sourceReference String?                 @map("source_reference")
+  reason          String
+  amount          Decimal                 @db.Decimal(10, 2)
+  isAutoGenerated Boolean                 @default(false) @map("is_auto_generated")
+  createdByUserId String?                 @map("created_by_user_id")
+  createdBy       User?                   @relation("PayrollAdjustmentCreator", fields: [createdByUserId], references: [id])
+  updatedByUserId String?                 @map("updated_by_user_id")
+  updatedBy       User?                   @relation("PayrollAdjustmentUpdater", fields: [updatedByUserId], references: [id])
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+
+  @@unique([payrollRecordId, source, sourceReference])
+  @@index([payrollRecordId, type])
+  @@map("payroll_adjustments")
+}
+
+model AcademyPaymentSettings {
+  id                  String   @id @default(cuid())
+  academyId           String   @unique @map("academy_id")
+  academy             Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  jazzCashNumber      String?  @map("jazzcash_number")
+  easyPaisaNumber     String?  @map("easypaisa_number")
+  bankName            String?  @map("bank_name")
+  bankAccountTitle    String?  @map("bank_account_title")
+  bankAccountNumber   String?  @map("bank_account_number")
+  iban                String?
+  paymentInstructions String?  @map("payment_instructions")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("academy_payment_settings")
+}
+
+model ManualPaymentSubmission {
+  id                String           @id @default(cuid())
+  invoiceId         String           @map("invoice_id")
+  invoice           Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  academyId         String           @map("academy_id")
+  academy           Academy          @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  submittedByUserId String           @map("submitted_by_user_id")
+  submittedBy       User             @relation("ManualPaymentSubmitter", fields: [submittedByUserId], references: [id])
+  amount            Decimal          @db.Decimal(10, 2)
+  paymentMethod     PaymentMethod    @map("payment_method")
+  transactionId     String?          @map("transaction_id")
+  paymentDate       DateTime         @map("payment_date")
+  note              String?
+  receiptUrl        String?          @map("receipt_url")
+  status            SubmissionStatus @default(pending)
+  rejectionReason   String?          @map("rejection_reason")
+  reviewedByUserId  String?          @map("reviewed_by_user_id")
+  reviewedBy        User?            @relation("ManualPaymentReviewer", fields: [reviewedByUserId], references: [id])
+  reviewedAt        DateTime?        @map("reviewed_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@index([academyId, status])
+  @@index([invoiceId])
+  @@index([submittedByUserId])
+  @@index([status])
+  @@map("manual_payment_submissions")
+}
+
+enum SubmissionStatus {
+  pending
+  approved
+  rejected
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+model InvoiceAdjustment {
+  id              String         @id @default(cuid())
+
+  invoiceId       String         @map("invoice_id")
+  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  type            AdjustmentType @map("type")
+  label           String
+  amount          Decimal        @db.Decimal(10, 2)
+  notes           String?
+
+  createdByUserId String         @map("created_by_user_id")
+  createdBy       User           @relation("InvoiceAdjustmentCreator", fields: [createdByUserId], references: [id])
+
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  @@index([invoiceId])
+  @@map("invoice_adjustments")
+}
+
+enum AdjustmentType {
+  discount
+  waiver
+  surcharge
+}
+
+// ============================================
+// PHASE 6: REPORTS SYSTEM
+// ============================================
+model Report {
+  id               String          @id @default(cuid())
+
+  classId          String          @map("class_id")
+  class            Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  studentProfileId String          @map("student_profile_id")
+  studentProfile   StudentProfile  @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  teacherProfileId String          @map("teacher_profile_id")
+  teacherProfile   TeacherProfile  @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  reportType       ReportType      @map("report_type")
+  reportDate       DateTime        @map("report_date")
+  periodStart      DateTime        @map("period_start")
+  periodEnd        DateTime        @map("period_end")
+  status           ReportStatus    @default(draft)
+  publishedAt      DateTime?       @map("published_at")
+  pdfUrl           String?         @map("pdf_url")
+
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  sections         ReportSection[]
+  attachments      ReportAttachment[]
+
+  @@index([studentProfileId, reportDate])
+  @@index([classId, reportType])
+  @@index([teacherProfileId])
+  @@index([status])
+  @@map("reports")
+}
+
+enum ReportType {
+  daily
+  weekly
+  monthly
+  term
+}
+
+enum ReportStatus {
+  draft
+  published
+  archived
+}
+
+model ReportSection {
+  id          String       @id @default(cuid())
+
+  reportId    String       @map("report_id")
+  report      Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  sectionType SectionType  @map("section_type")
+  content     String?
+  contentJson Json?        @map("content_json")
+  rating      Int?
+  orderIndex  Int          @map("order_index")
+
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@index([reportId, orderIndex])
+  @@map("report_sections")
+}
+
+enum SectionType {
+  attendance
+  homework
+  strengths
+  improvements
+  next_focus
+  teacher_remarks
+  behavior
+  grades
+}
+
+model ReportAttachment {
+  id               String    @id @default(cuid())
+
+  reportId         String    @map("report_id")
+  report           Report    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  fileName         String    @map("file_name")
+  fileUrl          String    @map("file_url")
+  fileSize         Int       @map("file_size")
+  mimeType         String    @map("mime_type")
+
+  uploadedByUserId String    @map("uploaded_by_user_id")
+  uploadedBy       User      @relation(fields: [uploadedByUserId], references: [id])
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([reportId])
+  @@map("report_attachments")
+}
+
+// ============================================
+// PHASE 10: EXAMS, TESTS & RESULTS
+// ============================================
+model Exam {
+  id              String    @id @default(cuid())
+
+  academyId       String    @map("academy_id")
+  academy         Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  classId         String    @map("class_id")
+  class           Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  courseId        String?   @map("course_id")
+  course          Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  name            String
+  type            ExamType
+  examDate        DateTime  @map("exam_date")
+  totalMarks      Decimal   @db.Decimal(10, 2) @map("total_marks")
+  notes           String?
+
+  createdByUserId String    @map("created_by_user_id")
+  createdBy       User      @relation("ExamCreator", fields: [createdByUserId], references: [id])
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  results         ExamResult[]
+  resultFiles     ResultFile[]
+
+  @@index([academyId, examDate(sort: Desc)])
+  @@index([classId, examDate(sort: Desc)])
+  @@index([courseId])
+  @@map("exams")
+}
+
+enum ExamType {
+  quiz
+  monthly
+  midterm
+  final
+  annual
+}
+
+model ExamResult {
+  id               String         @id @default(cuid())
+
+  examId           String         @map("exam_id")
+  exam             Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  studentProfileId String         @map("student_profile_id")
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  obtainedMarks    Decimal        @db.Decimal(10, 2) @map("obtained_marks")
+  totalMarks       Decimal        @db.Decimal(10, 2) @map("total_marks")
+  percentage       Decimal        @db.Decimal(5, 2)
+  grade            String?
+  remarks          String?
+
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  @@unique([examId, studentProfileId])
+  @@index([studentProfileId, createdAt(sort: Desc)])
+  @@index([examId, percentage(sort: Desc)])
+  @@map("exam_results")
+}
+
+model ResultFile {
+  id               String         @id @default(cuid())
+
+  examId           String         @map("exam_id")
+  exam             Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  studentProfileId String?        @map("student_profile_id")
+  studentProfile   StudentProfile? @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  fileUrl          String         @map("file_url")
+  fileType         ResultFileType @map("file_type")
+  mimeType         String         @map("mime_type")
+
+  uploadedByUserId String         @map("uploaded_by_user_id")
+  uploadedBy       User           @relation("ResultFileUploader", fields: [uploadedByUserId], references: [id])
+
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  @@index([examId, fileType])
+  @@index([studentProfileId])
+  @@index([fileUrl])
+  @@map("result_files")
+}
+
+enum ResultFileType {
+  monthly_report
+  annual_report
+  marksheet
+}
+
+// ============================================
+// PHASE 7: NOTIFICATIONS & COMMUNICATION
+// ============================================
+model Notification {
+  id         String           @id @default(cuid())
+
+  userId     String           @map("user_id")
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type       NotificationType
+  title      String
+  message    String
+  isRead     Boolean          @default(false) @map("is_read")
+  actionUrl  String?          @map("action_url")
+  entityType String?          @map("entity_type")
+  entityId   String?          @map("entity_id")
+
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@index([userId, type])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  attendance
+  payroll
+  fee_due
+  report_published
+  class_cancelled
+  new_material
+  comment_reply
+  announcement
+  payment_received
+  invoice_sent
+  payment_overdue
+}
+
+model Post {
+  id            String         @id @default(cuid())
+
+  classId       String?        @map("class_id")
+  class         Class?         @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  authorUserId  String         @map("author_user_id")
+  author        User           @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  title         String
+  content       String
+  imageUrl      String?        @map("image_url")
+  isPinned      Boolean        @default(false) @map("is_pinned")
+  allowComments Boolean        @default(true) @map("allow_comments")
+  visibility    PostVisibility @default(class_only)
+
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  comments      Comment[]
+  recipients    PostRecipient[]
+  reactions     PostReaction[]
+  views         PostView[]
+
+  @@index([classId, createdAt(sort: Desc)])
+  @@index([authorUserId])
+  @@index([isPinned])
+  @@map("posts")
+}
+
+enum PostVisibility {
+  class_only
+  parents_only
+  students_only
+  everyone
+}
+
+model Comment {
+  id              String    @id @default(cuid())
+
+  postId          String    @map("post_id")
+  post            Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  parentCommentId String?   @map("parent_comment_id")
+  parentComment   Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[] @relation("CommentReplies")
+
+  authorUserId    String    @map("author_user_id")
+  author          User      @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  content         String
+  isEdited        Boolean   @default(false) @map("is_edited")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([postId, createdAt])
+  @@index([parentCommentId])
+  @@index([authorUserId])
+  @@map("comments")
+}
+
+enum PostReactionType {
+  like
+}
+
+model PostReaction {
+  id        String           @id @default(cuid())
+
+  postId    String           @map("post_id")
+  post      Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  userId    String           @map("user_id")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      PostReactionType @default(like)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@unique([postId, userId])
+  @@index([userId])
+  @@index([postId, type])
+  @@map("post_reactions")
+}
+
+model PostView {
+  id        String   @id @default(cuid())
+
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+
+  @@unique([postId, userId])
+  @@index([userId, viewedAt(sort: Desc)])
+  @@index([postId, viewedAt(sort: Desc)])
+  @@map("post_views")
+}
+
+model PostRecipient {
+  id          String    @id @default(cuid())
+
+  postId      String    @map("post_id")
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deliveredAt DateTime  @default(now()) @map("delivered_at")
+  readAt      DateTime? @map("read_at")
+
+  @@unique([postId, userId])
+  @@index([userId, readAt])
+  @@map("post_recipients")
+}
+
+model EmailLog {
+  id                String      @id @default(cuid())
+  recipientEmail    String      @map("recipient_email")
+  recipientUserId   String?     @map("recipient_user_id")
+  recipientUser     User?       @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
+  subject           String
+  template          String
+  status            EmailStatus @default(pending)
+  provider          String
+  providerMessageId String?     @map("provider_message_id")
+  errorMessage      String?     @map("error_message")
+  entityType        String?     @map("entity_type")
+  entityId          String?     @map("entity_id")
+  metadata          Json?
+  sentAt            DateTime?   @map("sent_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  @@index([recipientEmail])
+  @@index([status])
+  @@index([template])
+  @@index([createdAt])
+  @@map("email_logs")
+}
+
+enum EmailStatus {
+  pending
+  sent
+  failed
+  bounced
+}
+
+enum JobStatus {
+  started
+  completed
+  failed
+}
+
+model SystemJobLog {
+  id             String    @id @default(cuid())
+  jobName        String    @map("job_name")
+  status         JobStatus @default(started)
+  startedAt      DateTime  @default(now()) @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  itemsProcessed Int       @default(0) @map("items_processed")
+  itemsSucceeded Int       @default(0) @map("items_succeeded")
+  itemsFailed    Int       @default(0) @map("items_failed")
+  metadata       Json?
+  errorMessage   String?   @map("error_message")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([jobName, startedAt(sort: Desc)])
+  @@index([status])
+  @@map("system_job_logs")
+}
