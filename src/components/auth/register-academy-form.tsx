@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -28,25 +28,24 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-const formSchema = z.object({
-  // Step 1: Academy Details
-  academyName: z.string().min(2, "Academy name must be at least 2 characters"),
-  subdomain: z
-    .string()
-    .min(3, "Subdomain must be at least 3 characters")
-    .regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers, and hyphens allowed"),
-  contactEmail: z.string().email("Please enter a valid email address"),
-
-  // Step 2: Admin Account
-  firstName: z.string().min(2, "First name must be at least 2 characters"),
-  lastName: z.string().min(2, "Last name must be at least 2 characters"),
-  adminEmail: z.string().email("Please enter a valid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-})
+const formSchema = z
+  .object({
+    academyName: z.string().min(2, "Academy name must be at least 2 characters"),
+    subdomain: z
+      .string()
+      .min(3, "Subdomain must be at least 3 characters")
+      .regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers, and hyphens allowed"),
+    contactEmail: z.string().email("Please enter a valid email address"),
+    firstName: z.string().min(2, "First name must be at least 2 characters"),
+    lastName: z.string().min(2, "Last name must be at least 2 characters"),
+    adminEmail: z.string().email("Please enter a valid email address"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  })
 
 type FormValues = z.infer<typeof formSchema>
 
@@ -56,6 +55,10 @@ const steps = [
   { id: 3, title: "Review", description: "Confirm your information" },
 ]
 
+function normalizeEmailValue(value: string) {
+  return value.trim().toLowerCase()
+}
+
 export function RegisterAcademyForm() {
   const router = useRouter()
   const [step, setStep] = React.useState(1)
@@ -63,6 +66,8 @@ export function RegisterAcademyForm() {
   const [error, setError] = React.useState<string | null>(null)
   const [isSubdomainAvailable, setIsSubdomainAvailable] = React.useState<boolean | null>(null)
   const [isCheckingSubdomain, setIsCheckingSubdomain] = React.useState(false)
+  const [subdomainCheckNotice, setSubdomainCheckNotice] = React.useState<string | null>(null)
+  const subdomainCheckTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -80,15 +85,38 @@ export function RegisterAcademyForm() {
   })
 
   const checkSubdomain = async (subdomain: string) => {
-    if (subdomain.length < 3) return
+    if (subdomain.length < 3) {
+      return
+    }
 
     setIsCheckingSubdomain(true)
+    setSubdomainCheckNotice(null)
+
     try {
       const response = await fetch(`/api/register/check-subdomain?subdomain=${subdomain}`)
       const data = await response.json()
-      setIsSubdomainAvailable(data.available)
-    } catch (err) {
+
+      if (!response.ok) {
+        setIsSubdomainAvailable(null)
+        setSubdomainCheckNotice(
+          data.warning ||
+            "Subdomain check is temporarily unavailable. A fallback subdomain will be assigned during registration if needed."
+        )
+        return
+      }
+
+      setIsSubdomainAvailable(typeof data.available === "boolean" ? data.available : null)
+      setSubdomainCheckNotice(
+        data.warning ||
+          (data.available === false
+            ? "Requested subdomain is already in use. A fallback subdomain will be assigned during registration."
+            : null)
+      )
+    } catch {
       setIsSubdomainAvailable(null)
+      setSubdomainCheckNotice(
+        "Subdomain check is temporarily unavailable. A fallback subdomain will be assigned during registration if needed."
+      )
     } finally {
       setIsCheckingSubdomain(false)
     }
@@ -96,15 +124,28 @@ export function RegisterAcademyForm() {
 
   const handleSubdomainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
-    form.setValue("subdomain", value)
+    form.setValue("subdomain", value, { shouldValidate: true, shouldDirty: true })
+    setSubdomainCheckNotice(null)
+
+    if (subdomainCheckTimeoutRef.current) {
+      clearTimeout(subdomainCheckTimeoutRef.current)
+    }
 
     if (value.length >= 3) {
-      const timeoutId = setTimeout(() => checkSubdomain(value), 500)
-      return () => clearTimeout(timeoutId)
-    } else {
-      setIsSubdomainAvailable(null)
+      subdomainCheckTimeoutRef.current = setTimeout(() => checkSubdomain(value), 500)
+      return
     }
+
+    setIsSubdomainAvailable(null)
   }
+
+  React.useEffect(() => {
+    return () => {
+      if (subdomainCheckTimeoutRef.current) {
+        clearTimeout(subdomainCheckTimeoutRef.current)
+      }
+    }
+  }, [])
 
   async function onSubmit(values: FormValues) {
     if (step < 3) {
@@ -116,6 +157,7 @@ export function RegisterAcademyForm() {
     setError(null)
 
     try {
+      // TEMP: disable email verification for local/dev so registration submits directly.
       const response = await fetch("/api/register/academy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,7 +167,7 @@ export function RegisterAcademyForm() {
           contactEmail: values.contactEmail,
           firstName: values.firstName,
           lastName: values.lastName,
-          email: values.adminEmail,
+          email: normalizeEmailValue(values.adminEmail),
           password: values.password,
         }),
       })
@@ -136,10 +178,24 @@ export function RegisterAcademyForm() {
         throw new Error(data.error || "Registration failed")
       }
 
-      router.push("/login?registered=true")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed")
-      setStep(2)
+      const nextUrl = new URL("/login", window.location.origin)
+      nextUrl.searchParams.set("registered", "true")
+
+      if (typeof data.academy?.subdomain === "string") {
+        nextUrl.searchParams.set("subdomain", data.academy.subdomain)
+      }
+
+      if (typeof data.warning === "string" && data.warning.length > 0) {
+        nextUrl.searchParams.set("notice", data.warning)
+      }
+
+      router.push(`${nextUrl.pathname}${nextUrl.search}`)
+    } catch (submitError) {
+      const message =
+        submitError instanceof Error ? submitError.message : "Registration failed"
+
+      setError(message)
+      setStep(message.toLowerCase().includes("email") ? 2 : 3)
     } finally {
       setIsLoading(false)
     }
@@ -151,23 +207,28 @@ export function RegisterAcademyForm() {
     if (step === 1) {
       fieldsToValidate = ["academyName", "subdomain", "contactEmail"]
     } else if (step === 2) {
-      fieldsToValidate = ["firstName", "lastName", "adminEmail", "password", "confirmPassword"]
+      fieldsToValidate = [
+        "firstName",
+        "lastName",
+        "adminEmail",
+        "password",
+        "confirmPassword",
+      ]
     }
 
     const isValid = await form.trigger(fieldsToValidate)
 
-    if (isValid) {
-      if (step === 1 && !isSubdomainAvailable) {
-        form.setError("subdomain", { message: "This subdomain is not available" })
-        return
-      }
-
-      if (step === 3) {
-        form.handleSubmit(onSubmit)()
-      } else {
-        setStep(step + 1)
-      }
+    if (!isValid) {
+      return
     }
+
+    if (step === 3) {
+      form.handleSubmit(onSubmit)()
+      return
+    }
+
+    setError(null)
+    setStep(step + 1)
   }
 
   const prevStep = () => {
@@ -176,32 +237,30 @@ export function RegisterAcademyForm() {
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="mx-auto w-full max-w-2xl">
       <CardHeader>
-        <div className="flex items-center justify-between mb-4">
-          {steps.map((s, index) => (
-            <React.Fragment key={s.id}>
+        <div className="mb-4 flex items-center justify-between">
+          {steps.map((currentStep, index) => (
+            <React.Fragment key={currentStep.id}>
               <div className="flex items-center">
                 <div
                   className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
-                    step === s.id
+                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
+                    step === currentStep.id
                       ? "bg-primary text-primary-foreground"
-                      : step > s.id
-                      ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                      : "bg-muted text-muted-foreground"
+                      : step > currentStep.id
+                        ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                        : "bg-muted text-muted-foreground"
                   )}
                 >
-                  {step > s.id ? <Check className="w-4 h-4" /> : s.id}
+                  {step > currentStep.id ? <Check className="h-4 w-4" /> : currentStep.id}
                 </div>
                 <div className="ml-3 hidden sm:block">
-                  <p className="text-sm font-medium">{s.title}</p>
-                  <p className="text-xs text-muted-foreground">{s.description}</p>
+                  <p className="text-sm font-medium">{currentStep.title}</p>
+                  <p className="text-xs text-muted-foreground">{currentStep.description}</p>
                 </div>
               </div>
-              {index < steps.length - 1 && (
-                <div className="flex-1 mx-4 h-px bg-border" />
-              )}
+              {index < steps.length - 1 && <div className="mx-4 h-px flex-1 bg-border" />}
             </React.Fragment>
           ))}
         </div>
@@ -244,22 +303,26 @@ export function RegisterAcademyForm() {
                             onChange={handleSubdomainChange}
                             value={field.value}
                           />
-                          <span className="ml-2 text-muted-foreground">
-                            .academyflow.com
-                          </span>
+                          <span className="ml-2 text-muted-foreground">.academyflow.com</span>
                         </div>
                       </FormControl>
                       {isCheckingSubdomain && (
                         <FormDescription>Checking availability...</FormDescription>
                       )}
-                      {isSubdomainAvailable === true && (
-                        <FormDescription className="text-green-600">
-                          ✓ Subdomain is available
+                      {subdomainCheckNotice && (
+                        <FormDescription className="text-amber-600">
+                          {subdomainCheckNotice}
                         </FormDescription>
                       )}
-                      {isSubdomainAvailable === false && (
-                        <FormDescription className="text-destructive">
-                          ✗ Subdomain is already taken
+                      {isSubdomainAvailable === true && !subdomainCheckNotice && (
+                        <FormDescription className="text-green-600">
+                          Subdomain is available
+                        </FormDescription>
+                      )}
+                      {isSubdomainAvailable === false && !subdomainCheckNotice && (
+                        <FormDescription className="text-amber-600">
+                          Requested subdomain is already in use. A fallback subdomain will be
+                          assigned during registration.
                         </FormDescription>
                       )}
                       <FormMessage />
@@ -280,9 +343,7 @@ export function RegisterAcademyForm() {
                           {...field}
                         />
                       </FormControl>
-                      <FormDescription>
-                        Public email for academy inquiries
-                      </FormDescription>
+                      <FormDescription>Public email for academy inquiries</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -292,7 +353,7 @@ export function RegisterAcademyForm() {
 
             {step === 2 && (
               <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="firstName"
@@ -300,11 +361,7 @@ export function RegisterAcademyForm() {
                       <FormItem>
                         <FormLabel>First Name</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="John"
-                            disabled={isLoading}
-                            {...field}
-                          />
+                          <Input placeholder="John" disabled={isLoading} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -317,11 +374,7 @@ export function RegisterAcademyForm() {
                       <FormItem>
                         <FormLabel>Last Name</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="Doe"
-                            disabled={isLoading}
-                            {...field}
-                          />
+                          <Input placeholder="Doe" disabled={isLoading} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -342,9 +395,7 @@ export function RegisterAcademyForm() {
                           {...field}
                         />
                       </FormControl>
-                      <FormDescription>
-                        This will be your login email
-                      </FormDescription>
+                      <FormDescription>This will be your login email</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -358,14 +409,12 @@ export function RegisterAcademyForm() {
                       <FormControl>
                         <Input
                           type="password"
-                          placeholder="••••••••"
+                          placeholder="********"
                           disabled={isLoading}
                           {...field}
                         />
                       </FormControl>
-                      <FormDescription>
-                        At least 8 characters
-                      </FormDescription>
+                      <FormDescription>At least 8 characters</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -379,7 +428,7 @@ export function RegisterAcademyForm() {
                       <FormControl>
                         <Input
                           type="password"
-                          placeholder="••••••••"
+                          placeholder="********"
                           disabled={isLoading}
                           {...field}
                         />
@@ -388,46 +437,47 @@ export function RegisterAcademyForm() {
                     </FormItem>
                   )}
                 />
+                {error && <div className="text-sm font-medium text-destructive">{error}</div>}
               </>
             )}
 
             {step === 3 && (
               <div className="space-y-4">
                 <div className="rounded-lg border p-4">
-                  <h3 className="font-semibold mb-2">Academy Information</h3>
+                  <h3 className="mb-2 font-semibold">Academy Information</h3>
                   <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-4">
                       <dt className="text-muted-foreground">Academy Name:</dt>
-                      <dd className="font-medium">{form.getValues("academyName")}</dd>
+                      <dd className="text-right font-medium">{form.getValues("academyName")}</dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">Subdomain:</dt>
-                      <dd className="font-medium">{form.getValues("subdomain")}.academyflow.com</dd>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-muted-foreground">Requested Subdomain:</dt>
+                      <dd className="text-right font-medium">
+                        {form.getValues("subdomain")}.academyflow.com
+                      </dd>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-4">
                       <dt className="text-muted-foreground">Contact Email:</dt>
-                      <dd className="font-medium">{form.getValues("contactEmail")}</dd>
+                      <dd className="text-right font-medium">{form.getValues("contactEmail")}</dd>
                     </div>
                   </dl>
                 </div>
                 <div className="rounded-lg border p-4">
-                  <h3 className="font-semibold mb-2">Admin Account</h3>
+                  <h3 className="mb-2 font-semibold">Admin Account</h3>
                   <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-4">
                       <dt className="text-muted-foreground">Name:</dt>
-                      <dd className="font-medium">
+                      <dd className="text-right font-medium">
                         {form.getValues("firstName")} {form.getValues("lastName")}
                       </dd>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-4">
                       <dt className="text-muted-foreground">Email:</dt>
-                      <dd className="font-medium">{form.getValues("adminEmail")}</dd>
+                      <dd className="text-right font-medium">{form.getValues("adminEmail")}</dd>
                     </div>
                   </dl>
                 </div>
-                {error && (
-                  <div className="text-sm font-medium text-destructive">{error}</div>
-                )}
+                {error && <div className="text-sm font-medium text-destructive">{error}</div>}
               </div>
             )}
           </form>
@@ -435,23 +485,14 @@ export function RegisterAcademyForm() {
       </CardContent>
       <CardFooter className="flex justify-between">
         {step > 1 ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={prevStep}
-            disabled={isLoading}
-          >
+          <Button type="button" variant="outline" onClick={prevStep} disabled={isLoading}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
         ) : (
           <div />
         )}
-        <Button
-          type="button"
-          onClick={nextStep}
-          disabled={isLoading}
-        >
+        <Button type="button" onClick={nextStep} disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {step === 3 ? "Create Academy" : "Continue"}
           {step !== 3 && <ArrowRight className="ml-2 h-4 w-4" />}

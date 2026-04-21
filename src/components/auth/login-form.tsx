@@ -43,6 +43,8 @@ export function LoginForm() {
 
   const callbackUrl = searchParams.get("callbackUrl") || "/"
   const registered = searchParams.get("registered")
+  const notice = searchParams.get("notice")
+  const assignedSubdomain = searchParams.get("subdomain")
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -68,6 +70,16 @@ export function LoginForm() {
         if (result.error === "ACADEMY_DEACTIVATED") {
           router.push("/academy-deactivated?blocked=1")
           router.refresh()
+          setIsLoading(false)
+          return
+        }
+
+        if (
+          result.error === "AUTHENTICATION_UNAVAILABLE" ||
+          result.error === "Configuration" ||
+          result.error === "JWT_SESSION_ERROR"
+        ) {
+          setError("Sign in is temporarily unavailable. Please try again shortly.")
           setIsLoading(false)
           return
         }
@@ -98,7 +110,14 @@ export function LoginForm() {
       <CardContent>
         {registered && (
           <div className="mb-4 p-3 text-sm text-green-600 bg-green-50 rounded-md">
-            Academy created successfully! Please sign in with your admin credentials.
+            Academy created successfully!
+            {assignedSubdomain ? ` Assigned subdomain: ${assignedSubdomain}.academyflow.com.` : ""}
+            {" "}Please sign in with your admin credentials.
+          </div>
+        )}
+        {notice && (
+          <div className="mb-4 rounded-md bg-amber-50 p-3 text-sm text-amber-700">
+            {notice}
           </div>
         )}
         <Form {...form}>

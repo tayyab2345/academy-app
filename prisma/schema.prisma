@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
@@ -53,7 +54,7 @@ model Academy {
 /// Role-specific profiles will be added in Phase 2
 model User {
   id              String   @id @default(cuid())
-  email           String
+  email           String   @unique
   passwordHash    String   @map("password_hash")
   role            Role
   firstName       String   @map("first_name")
@@ -98,7 +99,6 @@ model User {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   
-  @@unique([email, academyId])
   @@index([academyId, role])
   @@map("users")
 }
@@ -1293,6 +1293,20 @@ model EmailLog {
   @@index([template])
   @@index([createdAt])
   @@map("email_logs")
+}
+
+model EmailVerification {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime @map("expires_at")
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([email, createdAt(sort: Desc)])
+  @@index([email, verified, expiresAt])
+  @@map("email_verifications")
 }
 
 enum EmailStatus {

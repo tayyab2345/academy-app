@@ -6,6 +6,8 @@ import { del, get, head, put } from "@vercel/blob"
 
 const STORAGE_BASE_PATH = path.resolve(
   process.env.DOCUMENT_STORAGE_PATH ||
+    // Railway exposes the volume mount path at runtime; prefer it automatically when available.
+    process.env.RAILWAY_VOLUME_MOUNT_PATH ||
     path.join(process.cwd(), "storage", "documents")
 )
 
