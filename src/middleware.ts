@@ -1,6 +1,21 @@
 import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
 
+function getRoleRedirectPath(role: string | undefined) {
+  switch (role) {
+    case "admin":
+      return "/admin"
+    case "teacher":
+      return "/teacher"
+    case "student":
+      return "/student"
+    case "parent":
+      return "/parent"
+    default:
+      return "/"
+  }
+}
+
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token
@@ -24,11 +39,11 @@ export default withAuth(
 
     // Redirect authenticated users away from auth pages
     if (token && path.startsWith("/login")) {
-      return NextResponse.redirect(new URL("/", req.url))
+      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role as string | undefined), req.url))
     }
 
     if (token && path.startsWith("/register")) {
-      return NextResponse.redirect(new URL("/", req.url))
+      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role as string | undefined), req.url))
     }
 
     // Protect dashboard routes
@@ -51,6 +66,9 @@ export default withAuth(
     return NextResponse.next()
   },
   {
+    pages: {
+      signIn: "/login",
+    },
     callbacks: {
       authorized: ({ token, req }) => {
         const path = req.nextUrl.pathname
@@ -79,10 +97,6 @@ export const config = {
     "/teacher/:path*",
     "/student/:path*",
     "/parent/:path*",
-    "/",
     "/notifications",
-    "/login",
-    "/register/:path*",
-    "/academy-deactivated",
   ],
 }

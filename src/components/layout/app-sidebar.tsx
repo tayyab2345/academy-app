@@ -269,6 +269,9 @@ export function AppSidebar({ className }: AppSidebarProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const userRole = session?.user?.role
+  const academyName = session?.user.academy?.name?.trim() || "AcademyFlow"
+  const homeHref = userRole ? `/${userRole}` : "/"
+  const portalLabel = userRole ? `${userRole} Portal` : "Academy Portal"
 
   const filteredNavigation = navigation.filter(
     (item) => userRole && item.roles.includes(userRole)
@@ -277,7 +280,7 @@ export function AppSidebar({ className }: AppSidebarProps) {
   return (
     <div className={cn("flex h-full flex-col border-r bg-background", className)}>
       <div className="flex h-16 items-center border-b px-4">
-        <Link href={`/${userRole}`} className="flex items-center gap-2">
+        <Link href={homeHref} className="flex items-center gap-2">
           <AcademyLogo
             name={session?.user.academy?.name}
             logoUrl={session?.user.academy?.logoUrl}
@@ -285,10 +288,10 @@ export function AppSidebar({ className }: AppSidebarProps) {
           />
           <div className="flex flex-col">
             <span className="line-clamp-1 text-sm font-semibold leading-tight">
-              {session?.user.academy?.name || "AcademyFlow"}
+              {academyName}
             </span>
-            <span className="text-xs capitalize text-muted-foreground">
-              {userRole} Portal
+            <span className="text-xs text-muted-foreground">
+              {portalLabel}
             </span>
           </div>
         </Link>

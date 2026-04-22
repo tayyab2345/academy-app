@@ -19,6 +19,8 @@ export function AppHeader({
   unreadNotificationCount,
 }: AppHeaderProps) {
   const { data: session } = useSession()
+  const firstName = session?.user.firstName?.trim() || "there"
+  const academyName = session?.user.academy?.name?.trim() || "AcademyFlow"
 
   return (
     <header
@@ -45,7 +47,7 @@ export function AppHeader({
 
           <div className="hidden md:block">
             <h1 className="text-lg font-semibold">
-              {getGreeting()}, {session?.user.firstName}!
+              {getGreeting()}, {firstName}!
             </h1>
             <p className="text-sm text-muted-foreground">
               {getCurrentDate()}
@@ -67,7 +69,7 @@ export function AppHeader({
                 Academy
               </p>
               <p className="line-clamp-1 text-sm font-medium">
-                {session?.user.academy?.name || "AcademyFlow"}
+                {academyName}
               </p>
             </div>
           </div>
@@ -78,7 +80,7 @@ export function AppHeader({
 
       <div className="px-4 pb-3 md:hidden">
         <h1 className="text-lg font-semibold">
-          {getGreeting()}, {session?.user.firstName}!
+          {getGreeting()}, {firstName}!
         </h1>
         <p className="text-sm text-muted-foreground">
           {getCurrentDate()}
@@ -91,7 +93,7 @@ export function AppHeader({
             className="h-6 w-6"
             iconClassName="h-3 w-3"
           />
-          <span>{session?.user.academy?.name || "AcademyFlow"}</span>
+          <span>{academyName}</span>
         </div>
       </div>
     </header>

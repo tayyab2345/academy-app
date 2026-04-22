@@ -1,6 +1,4 @@
 import type { Metadata, Viewport } from "next"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { getAppBaseUrl } from "@/lib/app-url"
 import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt"
 import { Providers } from "./providers"
@@ -48,12 +46,10 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession(authOptions)
-
   return (
     <html lang="en">
       <body>
-        <Providers session={session}>
+        <Providers session={null}>
           {children}
           <PWAInstallPrompt />
         </Providers>

@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth"
 import { requireActiveDashboardSession } from "@/lib/academy-session"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { getUnreadNotificationCount } from "@/lib/notifications/notification-data"
+import { Providers } from "@/app/providers"
 
 export default async function DashboardLayout({
   children,
@@ -17,8 +18,10 @@ export default async function DashboardLayout({
   )
 
   return (
-    <DashboardShell unreadNotificationCount={unreadNotificationCount}>
-      {children}
-    </DashboardShell>
+    <Providers session={activeSession}>
+      <DashboardShell unreadNotificationCount={unreadNotificationCount}>
+        {children}
+      </DashboardShell>
+    </Providers>
   )
 }

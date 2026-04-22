@@ -7,8 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "node .next/standalone/server.js",
+    "build": "prisma generate && next build && node scripts/prepare-standalone.cjs",
+    "start": "node scripts/start-standalone.cjs",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
