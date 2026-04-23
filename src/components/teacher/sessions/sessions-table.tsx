@@ -1,13 +1,8 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
-  MoreHorizontal,
   Eye,
-  Pencil,
-  Trash2,
   Users,
   Calendar,
   Clock,
@@ -23,24 +18,6 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import {
   formatSessionDate,
   formatSessionTime,
@@ -79,7 +56,6 @@ interface SessionsTableProps {
   page: number
   limit: number
   onPageChange: (page: number) => void
-  onDeleted?: () => Promise<void> | void
 }
 
 export function SessionsTable({
@@ -90,37 +66,8 @@ export function SessionsTable({
   page,
   limit,
   onPageChange,
-  onDeleted,
 }: SessionsTableProps) {
-  const router = useRouter()
-  const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-
   const totalPages = Math.ceil(total / limit)
-
-  const handleDelete = async () => {
-    if (!deleteId) return
-
-    setIsDeleting(true)
-    try {
-      const response = await fetch(`/api/teacher/sessions/${deleteId}`, {
-        method: "DELETE",
-      })
-
-      if (response.ok) {
-        if (onDeleted) {
-          await onDeleted()
-        } else {
-          router.refresh()
-        }
-        setDeleteId(null)
-      }
-    } catch (error) {
-      console.error("Failed to delete session:", error)
-    } finally {
-      setIsDeleting(false)
-    }
-  }
 
   const getPlatformBadge = (platform: string) => {
     const platforms: Record<string, string> = {
@@ -144,14 +91,15 @@ export function SessionsTable({
               <TableHead>Attendance</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Join</TableHead>
-              <TableHead className="w-[80px]">Actions</TableHead>
+              <TableHead className="w-[120px]">Details</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sessions.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-24 text-center">
-                  No sessions found
+                  Sessions will appear here automatically from the admin class
+                  schedule.
                 </TableCell>
               </TableRow>
             ) : (
@@ -234,36 +182,12 @@ export function SessionsTable({
                       )}
                     </TableCell>
                     <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem asChild>
-                            <Link href={`/teacher/sessions/${session.id}`}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              Take Attendance
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/teacher/sessions/${session.id}/edit`}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Edit
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => setDeleteId(session.id)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Link href={`/teacher/sessions/${session.id}`}>
+                        <Button variant="outline" size="sm">
+                          <Eye className="mr-2 h-4 w-4" />
+                          View
+                        </Button>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 )
@@ -302,28 +226,6 @@ export function SessionsTable({
           </div>
         </div>
       )}
-
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the
-              session and all associated attendance records.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }

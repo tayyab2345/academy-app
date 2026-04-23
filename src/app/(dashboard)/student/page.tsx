@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { authOptions } from "@/lib/auth"
 import { calculateOutstandingAmount } from "@/lib/invoice-utils"
+import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import {
   formatSessionDate,
@@ -49,6 +50,20 @@ async function getStudentDashboardCoreData(userId: string) {
       if (!studentProfile) {
         return null
       }
+
+      const activeEnrollmentClassIds = await prisma.enrollment.findMany({
+        where: {
+          studentProfileId: studentProfile.id,
+          status: "active",
+        },
+        select: {
+          classId: true,
+        },
+      })
+
+      await syncRecurringSessionsForClasses(
+        activeEnrollmentClassIds.map((enrollment) => enrollment.classId)
+      )
 
       const now = new Date()
       const recentAttendanceStart = new Date(now)

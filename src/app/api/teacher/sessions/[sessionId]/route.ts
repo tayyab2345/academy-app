@@ -89,6 +89,16 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (session.user.role === "teacher") {
+      return NextResponse.json(
+        {
+          error:
+            "Sessions are managed from the admin class schedule and cannot be edited here.",
+        },
+        { status: 403 }
+      )
+    }
+
     const access = await verifySessionAccess(
       params.sessionId,
       session.user.id,
@@ -121,6 +131,16 @@ export async function PATCH(
 
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (session.user.role === "teacher") {
+      return NextResponse.json(
+        {
+          error:
+            "Sessions are managed from the admin class schedule and cannot be deleted here.",
+        },
+        { status: 403 }
+      )
     }
 
     const access = await verifySessionAccess(

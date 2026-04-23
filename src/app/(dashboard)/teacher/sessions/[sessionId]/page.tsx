@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
-  Pencil,
   Video,
   MapPin,
   Users,
@@ -30,7 +29,9 @@ import {
   formatLateThresholdLabel,
   getEffectiveSessionMeetingSettings,
   getMeetingPlatformLabel,
+  getSessionJoinWindowState,
   getSessionStatusBadge,
+  SESSION_JOIN_LEAD_MINUTES,
 } from "@/lib/attendance-utils"
 import { TeacherJoinSessionCard } from "@/components/teacher/sessions/teacher-join-session-card"
 import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
@@ -211,6 +212,11 @@ export default async function SessionDetailPage({
     classMeetingPlatform: classSession.class.defaultMeetingPlatform,
     classMeetingLink: classSession.class.defaultMeetingLink,
   })
+  const joinWindow = getSessionJoinWindowState({
+    startTime: classSession.startTime,
+    endTime: classSession.endTime,
+    status: classSession.status,
+  })
 
   async function markAttendance(studentId: string, status: string) {
     "use server"
@@ -301,7 +307,7 @@ export default async function SessionDetailPage({
           </div>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          {canTrackTeacherJoin ? (
+          {canTrackTeacherJoin && (joinWindow.isVisible || teacherJoin) ? (
             <TeacherJoinButton
               sessionId={classSession.id}
               sessionStatus={classSession.status}
@@ -312,13 +318,11 @@ export default async function SessionDetailPage({
               align="start"
               className="w-full sm:w-auto"
             />
+          ) : canTrackTeacherJoin ? (
+            <p className="text-xs text-muted-foreground">
+              Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes before class time.
+            </p>
           ) : null}
-          <Link href={`/teacher/sessions/${params.sessionId}/edit`}>
-            <Button variant="outline" className="w-full sm:w-auto">
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit Session
-            </Button>
-          </Link>
         </div>
       </div>
 
@@ -370,6 +374,9 @@ export default async function SessionDetailPage({
                 Student late rule:{" "}
                 {formatLateThresholdLabel(classSession.class.lateThresholdMinutes)}
               </p>
+              <p className="text-sm text-muted-foreground">
+                This session is synced from the admin class schedule.
+              </p>
             </div>
           </div>
 
@@ -381,6 +388,8 @@ export default async function SessionDetailPage({
                 meetingPlatform={effectiveMeetingSettings.platform}
                 meetingLink={effectiveMeetingSettings.link}
                 initialJoin={teacherJoin}
+                joinWindowVisible={joinWindow.isVisible || Boolean(teacherJoin)}
+                joinWindowMessage={`Join button appears ${SESSION_JOIN_LEAD_MINUTES} minutes before class time.`}
               />
             </div>
           ) : null}

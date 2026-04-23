@@ -517,7 +517,8 @@ export function ClassForm({
             <CardTitle>Recurring Schedule</CardTitle>
             <CardDescription>
               Set the weekly days and time students, parents, teachers, and admins
-              should see for this class.
+              should see for this class. Scheduled sessions are generated
+              automatically from this setup.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -597,8 +598,8 @@ export function ClassForm({
           <CardHeader>
             <CardTitle>Online Class & Attendance Rules</CardTitle>
             <CardDescription>
-              Set the default join details and late rule that sessions and
-              student join tracking should follow.
+              Set the default join details and late rule that auto-generated
+              sessions and join tracking should follow.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

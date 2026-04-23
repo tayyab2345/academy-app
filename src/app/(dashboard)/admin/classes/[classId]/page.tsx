@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth"
 import { revalidatePath } from "next/cache"
 import { authOptions } from "@/lib/auth"
 import { getAdminTeacherAssignmentOptions } from "@/lib/admin/admin-lists-data"
+import { syncRecurringSessionsForClass } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import {
   ArrowLeft,
@@ -50,6 +51,8 @@ async function fetchClass(classId: string) {
   if (!session?.user || session.user.role !== "admin") {
     return null
   }
+
+  await syncRecurringSessionsForClass(classId)
 
   const classData = await prisma.class.findUnique({
     where: { id: classId },

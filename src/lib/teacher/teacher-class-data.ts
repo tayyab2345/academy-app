@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache"
+import { syncRecurringSessionsForClass, syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 
 export type TeacherClassOption = {
@@ -59,12 +60,14 @@ export type TeacherClassSessionsPageData = {
     scheduleRecurrence: string
     defaultMeetingPlatform: string
     defaultMeetingLink: string | null
+    lateThresholdMinutes: number
     course: {
       code: string
       name: string
       syllabusPdfUrl: string | null
       syllabusImageUrl: string | null
     }
+    nextSession: TeacherClassSessionListItem | null
   }
   sessions: TeacherClassSessionListItem[]
   total: number
@@ -148,6 +151,22 @@ export async function getTeacherClassesOverviewData(
   if (!teacherProfile) {
     return null
   }
+
+  const assignedClassIds = await prisma.classTeacher.findMany({
+    where: {
+      teacherProfileId: teacherProfile.id,
+      class: {
+        status: "active",
+      },
+    },
+    select: {
+      classId: true,
+    },
+  })
+
+  await syncRecurringSessionsForClasses(
+    assignedClassIds.map((assignment) => assignment.classId)
+  )
 
   const classTeachers = await prisma.classTeacher.findMany({
     where: {
@@ -272,6 +291,85 @@ export async function getTeacherClassSessionsPageData(input: {
     return null
   }
 
+  await syncRecurringSessionsForClass(input.classId)
+
+  const refreshedClassTeacher = await prisma.classTeacher.findUnique({
+    where: {
+      classId_teacherProfileId: {
+        classId: input.classId,
+        teacherProfileId: teacherProfile.id,
+      },
+    },
+    select: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          section: true,
+          scheduleDays: true,
+          scheduleStartTime: true,
+          scheduleEndTime: true,
+          scheduleRecurrence: true,
+          defaultMeetingPlatform: true,
+          defaultMeetingLink: true,
+          lateThresholdMinutes: true,
+          course: {
+            select: {
+              code: true,
+              name: true,
+              syllabusPdfUrl: true,
+              syllabusImageUrl: true,
+            },
+          },
+          sessions: {
+            where: {
+              endTime: {
+                gte: new Date(),
+              },
+              status: {
+                in: ["scheduled", "ongoing"],
+              },
+            },
+            orderBy: {
+              startTime: "asc",
+            },
+            take: 1,
+            select: {
+              id: true,
+              title: true,
+              sessionDate: true,
+              startTime: true,
+              endTime: true,
+              meetingPlatform: true,
+              meetingLink: true,
+              status: true,
+              teacherJoins: {
+                where: {
+                  teacherProfileId: teacherProfile.id,
+                },
+                select: {
+                  joinTime: true,
+                  status: true,
+                  lateMinutes: true,
+                },
+                take: 1,
+              },
+              _count: {
+                select: {
+                  attendances: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!refreshedClassTeacher) {
+    return null
+  }
+
   const where = {
     classId: input.classId,
   }
@@ -313,14 +411,51 @@ export async function getTeacherClassSessionsPageData(input: {
   ])
 
   return {
-    classInfo: classTeacher.class,
+    classInfo: {
+      ...refreshedClassTeacher.class,
+      nextSession: refreshedClassTeacher.class.sessions[0]
+        ? {
+            id: refreshedClassTeacher.class.sessions[0].id,
+            title: refreshedClassTeacher.class.sessions[0].title,
+            meetingPlatform:
+              refreshedClassTeacher.class.sessions[0].meetingPlatform,
+            meetingLink: refreshedClassTeacher.class.sessions[0].meetingLink,
+            status: refreshedClassTeacher.class.sessions[0].status,
+            sessionDate:
+              refreshedClassTeacher.class.sessions[0].sessionDate.toISOString(),
+            startTime:
+              refreshedClassTeacher.class.sessions[0].startTime.toISOString(),
+            endTime:
+              refreshedClassTeacher.class.sessions[0].endTime.toISOString(),
+            _count: {
+              attendances:
+                refreshedClassTeacher.class.sessions[0]._count.attendances,
+            },
+            teacherJoin: refreshedClassTeacher.class.sessions[0].teacherJoins[0]
+              ? {
+                  joinTime:
+                    refreshedClassTeacher.class.sessions[0].teacherJoins[0].joinTime.toISOString(),
+                  status:
+                    refreshedClassTeacher.class.sessions[0].teacherJoins[0].status,
+                  lateMinutes:
+                    refreshedClassTeacher.class.sessions[0].teacherJoins[0].lateMinutes,
+                }
+              : null,
+          }
+        : null,
+    },
     sessions: sessions.map((session) => ({
-      ...session,
-      meetingPlatform: session.meetingPlatform,
-      status: session.status,
+      id: session.id,
+      title: session.title,
       sessionDate: session.sessionDate.toISOString(),
       startTime: session.startTime.toISOString(),
       endTime: session.endTime.toISOString(),
+      meetingPlatform: session.meetingPlatform,
+      meetingLink: session.meetingLink,
+      status: session.status,
+      _count: {
+        attendances: session._count.attendances,
+      },
       teacherJoin: session.teacherJoins[0]
         ? {
             joinTime: session.teacherJoins[0].joinTime.toISOString(),

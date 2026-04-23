@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { syncRecurringSessionsForClass } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import {
   ArrowLeft,
@@ -30,6 +31,8 @@ import {
   formatLateThresholdLabel,
   getEffectiveSessionMeetingSettings,
   getMeetingPlatformLabel,
+  getSessionJoinWindowState,
+  SESSION_JOIN_LEAD_MINUTES,
 } from "@/lib/attendance-utils"
 
 interface ClassDetailPageProps {
@@ -65,6 +68,8 @@ async function fetchClassData(classId: string) {
   if (!enrollment || enrollment.status !== "active") {
     return null
   }
+
+  await syncRecurringSessionsForClass(classId)
 
   const classData = await prisma.class.findUnique({
     where: { id: classId },
@@ -157,13 +162,21 @@ export default async function StudentClassDetailPage({
     notFound()
   }
 
-  const upcomingSessions = classData.sessions.filter(
-    (sessionItem) =>
-      sessionItem.status === "scheduled" || sessionItem.status === "ongoing"
-  )
-  const pastSessions = classData.sessions.filter(
-    (sessionItem) => sessionItem.status === "completed"
-  )
+  const upcomingSessions = classData.sessions
+    .filter(
+      (sessionItem) =>
+        sessionItem.status === "scheduled" || sessionItem.status === "ongoing"
+    )
+    .sort(
+      (left, right) =>
+        new Date(left.startTime).getTime() - new Date(right.startTime).getTime()
+    )
+  const pastSessions = classData.sessions
+    .filter((sessionItem) => sessionItem.status === "completed")
+    .sort(
+      (left, right) =>
+        new Date(right.startTime).getTime() - new Date(left.startTime).getTime()
+    )
 
   return (
     <div className="space-y-6">
@@ -239,15 +252,71 @@ export default async function StudentClassDetailPage({
                   <p className="text-sm">
                     {getMeetingPlatformLabel(classData.defaultMeetingPlatform)}
                   </p>
-                  {classData.defaultMeetingLink ? (
-                    <div className="pt-2">
-                      <MeetingLinkButton href={classData.defaultMeetingLink} />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Admin has not added the class meeting link yet.
-                    </p>
-                  )}
+                  {(() => {
+                    const nextSession = upcomingSessions[0] || null
+
+                    if (nextSession) {
+                      const effectiveMeetingSettings = getEffectiveSessionMeetingSettings(
+                        {
+                          sessionMeetingPlatform: nextSession.meetingPlatform,
+                          sessionMeetingLink: nextSession.meetingLink,
+                          classMeetingPlatform: classData.defaultMeetingPlatform,
+                          classMeetingLink: classData.defaultMeetingLink,
+                        }
+                      )
+                      const joinWindow = getSessionJoinWindowState({
+                        startTime: nextSession.startTime,
+                        endTime: nextSession.endTime,
+                        status: nextSession.status,
+                      })
+                      const studentAttendance = nextSession.attendances[0] || null
+
+                      if (joinWindow.isVisible) {
+                        return (
+                          <div className="pt-2">
+                            <JoinSessionButton
+                              sessionId={nextSession.id}
+                              sessionStatus={nextSession.status}
+                              meetingPlatform={effectiveMeetingSettings.platform}
+                              meetingLink={effectiveMeetingSettings.link}
+                              initialAttendance={
+                                studentAttendance
+                                  ? {
+                                      joinTime: studentAttendance.joinTime
+                                        ? studentAttendance.joinTime.toISOString()
+                                        : null,
+                                      lateMinutes: studentAttendance.lateMinutes,
+                                    }
+                                  : null
+                              }
+                              align="start"
+                            />
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="pt-2 text-xs text-muted-foreground">
+                          Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes
+                          before the scheduled class time.
+                        </div>
+                      )
+                    }
+
+                    if (classData.defaultMeetingLink) {
+                      return (
+                        <div className="pt-2">
+                          <MeetingLinkButton href={classData.defaultMeetingLink} />
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        Admin has not added the class meeting link yet.
+                      </p>
+                    )
+                  })()}
                 </div>
               ) : null}
             </CardContent>
@@ -321,6 +390,11 @@ export default async function StudentClassDetailPage({
                       sessionMeetingLink: sessionItem.meetingLink,
                       classMeetingPlatform: classData.defaultMeetingPlatform,
                       classMeetingLink: classData.defaultMeetingLink,
+                    })
+                    const joinWindow = getSessionJoinWindowState({
+                      startTime: sessionItem.startTime,
+                      endTime: sessionItem.endTime,
+                      status: sessionItem.status,
                     })
                     const joinStatus =
                       studentAttendance?.joinTime
@@ -397,23 +471,30 @@ export default async function StudentClassDetailPage({
                             </div>
                           ) : null}
                         </div>
-                        <JoinSessionButton
-                          sessionId={sessionItem.id}
-                          sessionStatus={sessionItem.status}
-                          meetingPlatform={effectiveMeetingSettings.platform}
-                          meetingLink={effectiveMeetingSettings.link}
-                          initialAttendance={
-                            studentAttendance
-                              ? {
-                                  joinTime: studentAttendance.joinTime
-                                    ? studentAttendance.joinTime.toISOString()
-                                    : null,
-                                  lateMinutes: studentAttendance.lateMinutes,
-                                }
-                              : null
-                          }
-                          align="start"
-                        />
+                        {joinWindow.isVisible ? (
+                          <JoinSessionButton
+                            sessionId={sessionItem.id}
+                            sessionStatus={sessionItem.status}
+                            meetingPlatform={effectiveMeetingSettings.platform}
+                            meetingLink={effectiveMeetingSettings.link}
+                            initialAttendance={
+                              studentAttendance
+                                ? {
+                                    joinTime: studentAttendance.joinTime
+                                      ? studentAttendance.joinTime.toISOString()
+                                      : null,
+                                    lateMinutes: studentAttendance.lateMinutes,
+                                  }
+                                : null
+                            }
+                            align="start"
+                          />
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes
+                            before class time.
+                          </p>
+                        )}
                       </div>
                     )
                   })}

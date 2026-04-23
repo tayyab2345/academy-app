@@ -69,10 +69,20 @@ export default async function StudentAttendancePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <SummaryCard title="Attendance Rate" value={attendanceRate !== null ? `${attendanceRate}%` : "-"} />
         <SummaryCard title="Present" value={data.summary.present} tone="success" />
         <SummaryCard title="Late" value={data.summary.late} tone="warning" />
+        <SummaryCard
+          title="Late This Week"
+          value={data.lateJoinInsights.weekCount}
+          tone="warning"
+        />
+        <SummaryCard
+          title="Late This Month"
+          value={data.lateJoinInsights.monthCount}
+          tone="warning"
+        />
         <SummaryCard title="Absent" value={data.summary.absent} tone="danger" />
         <SummaryCard title="Excused" value={data.summary.excused} tone="muted" />
       </div>

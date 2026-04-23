@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import {
   calculateSessionJoinStatus,
   getEffectiveSessionMeetingSettings,
+  getSessionJoinWindowState,
 } from "@/lib/attendance-utils"
 import { notifyTeacherLateJoin } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
@@ -37,11 +38,13 @@ export async function POST(
         id: true,
         classId: true,
         startTime: true,
+        endTime: true,
         status: true,
         meetingLink: true,
         meetingPlatform: true,
         class: {
           select: {
+            lateThresholdMinutes: true,
             defaultMeetingLink: true,
             defaultMeetingPlatform: true,
           },
@@ -80,6 +83,12 @@ export async function POST(
       )
     }
 
+    const joinWindow = getSessionJoinWindowState({
+      startTime: classSession.startTime,
+      endTime: classSession.endTime,
+      status: classSession.status,
+    })
+
     const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
       sessionMeetingPlatform: classSession.meetingPlatform,
       sessionMeetingLink: classSession.meetingLink,
@@ -116,8 +125,21 @@ export async function POST(
       })
     }
 
+    if (!joinWindow.isVisible) {
+      return NextResponse.json(
+        {
+          error: "Join will be available shortly before the scheduled class time.",
+        },
+        { status: 400 }
+      )
+    }
+
     const joinTime = new Date()
-    const joinResult = calculateSessionJoinStatus(classSession.startTime, joinTime)
+    const joinResult = calculateSessionJoinStatus(
+      classSession.startTime,
+      joinTime,
+      classSession.class.lateThresholdMinutes
+    )
 
     const teacherJoin = await prisma.teacherSessionJoin.create({
       data: {

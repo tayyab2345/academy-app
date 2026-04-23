@@ -16,6 +16,8 @@ interface TeacherJoinSessionCardProps {
   meetingPlatform: string
   meetingLink: string | null
   initialJoin: TeacherJoinRecord | null
+  joinWindowVisible?: boolean
+  joinWindowMessage?: string
 }
 
 export function TeacherJoinSessionCard({
@@ -24,6 +26,8 @@ export function TeacherJoinSessionCard({
   meetingPlatform,
   meetingLink,
   initialJoin,
+  joinWindowVisible = true,
+  joinWindowMessage,
 }: TeacherJoinSessionCardProps) {
   const statusBadge = initialJoin
     ? getSessionJoinStatusBadge(initialJoin.status)
@@ -56,6 +60,11 @@ export function TeacherJoinSessionCard({
                   : "Joined on time"}
               </p>
             </div>
+          ) : !joinWindowVisible ? (
+            <p className="text-sm text-muted-foreground">
+              {joinWindowMessage ||
+                "Join button appears shortly before the scheduled class time."}
+            </p>
           ) : meetingPlatform !== "in_person" && !meetingLink ? (
             <p className="text-sm text-muted-foreground">
               Add a meeting link before teachers can join this online session.
@@ -67,14 +76,16 @@ export function TeacherJoinSessionCard({
           )}
         </div>
 
-        <TeacherJoinButton
-          sessionId={sessionId}
-          sessionStatus={sessionStatus}
-          meetingPlatform={meetingPlatform}
-          meetingLink={meetingLink}
-          initialJoin={initialJoin}
-          showMeta={false}
-        />
+        {joinWindowVisible || initialJoin ? (
+          <TeacherJoinButton
+            sessionId={sessionId}
+            sessionStatus={sessionStatus}
+            meetingPlatform={meetingPlatform}
+            meetingLink={meetingLink}
+            initialJoin={initialJoin}
+            showMeta={false}
+          />
+        ) : null}
       </div>
     </div>
   )

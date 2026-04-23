@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { syncClassEnrollmentAssignments } from "@/lib/class-enrollment"
+import { syncRecurringSessionsForClass } from "@/lib/class-session-schedule"
 import { syncPrimaryTeacherAssignment } from "@/lib/class-teacher-assignment"
 import { prisma } from "@/lib/prisma"
 import { CLASS_WEEKDAY_VALUES } from "@/lib/class-schedule"
@@ -386,6 +387,8 @@ export async function PATCH(
         },
       },
     })
+
+    await syncRecurringSessionsForClass(params.classId)
 
     return NextResponse.json({ class: classData })
   } catch (error) {

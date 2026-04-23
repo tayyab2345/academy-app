@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react"
 import { authOptions } from "@/lib/auth"
+import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import {
   formatSessionDate,
@@ -47,6 +48,22 @@ async function getTeacherDashboardData(userId: string) {
       if (!teacherProfile) {
         return null
       }
+
+      const assignedClassIds = await prisma.classTeacher.findMany({
+        where: {
+          teacherProfileId: teacherProfile.id,
+          class: {
+            status: "active",
+          },
+        },
+        select: {
+          classId: true,
+        },
+      })
+
+      await syncRecurringSessionsForClasses(
+        assignedClassIds.map((assignment) => assignment.classId)
+      )
 
       const now = new Date()
       const startOfToday = new Date(now)

@@ -197,6 +197,16 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (session.user.role === "teacher") {
+      return NextResponse.json(
+        {
+          error:
+            "Sessions are generated automatically from the admin class schedule.",
+        },
+        { status: 403 }
+      )
+    }
+
     const access = await verifyClassAccess(
       params.classId,
       session.user.id,

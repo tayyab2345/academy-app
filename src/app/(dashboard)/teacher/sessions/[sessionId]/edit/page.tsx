@@ -102,6 +102,10 @@ export default async function EditSessionPage({
     redirect("/login")
   }
 
+  if (session.user.role === "teacher") {
+    redirect(`/teacher/sessions/${params.sessionId}`)
+  }
+
   const classSession = await fetchSessionData(params.sessionId)
 
   if (!classSession) {

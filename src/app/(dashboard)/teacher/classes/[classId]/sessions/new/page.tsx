@@ -102,6 +102,10 @@ export default async function NewSessionPage({
     redirect("/login")
   }
 
+  if (session.user.role === "teacher") {
+    redirect(`/teacher/classes/${params.classId}/sessions`)
+  }
+
   const classData = await verifyClassAccess(params.classId)
 
   if (!classData) {

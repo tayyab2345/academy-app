@@ -438,11 +438,27 @@ export async function notifyStudentLateJoin(
       classSession: {
         include: {
           class: {
-            include: {
+            select: {
+              id: true,
+              academyId: true,
+              name: true,
               course: {
                 select: {
                   code: true,
                   name: true,
+                },
+              },
+              teachers: {
+                select: {
+                  teacherProfile: {
+                    select: {
+                      user: {
+                        select: {
+                          id: true,
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -486,6 +502,19 @@ export async function notifyStudentLateJoin(
   const parentUserIds = attendance.studentProfile.parentLinks.map(
     (link) => link.parentProfile.user.id
   )
+  const teacherUserIds = attendance.classSession.class.teachers.map(
+    (assignment) => assignment.teacherProfile.user.id
+  )
+  const admins = await prisma.user.findMany({
+    where: {
+      academyId: attendance.classSession.class.academyId,
+      role: Role.admin,
+    },
+    select: {
+      id: true,
+    },
+  })
+  const dateParam = attendance.classSession.sessionDate.toISOString().slice(0, 10)
 
   await createNotificationsForMany(parentUserIds, {
     type: "attendance",
@@ -495,6 +524,27 @@ export async function notifyStudentLateJoin(
     entityType: "attendance",
     entityId: attendance.id,
   })
+
+  await createNotificationsForMany(teacherUserIds, {
+    type: "attendance",
+    title: "Student Joined Late",
+    message: `${studentName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
+    actionUrl: `/teacher/sessions/${attendance.classSessionId}`,
+    entityType: "attendance",
+    entityId: attendance.id,
+  })
+
+  await createNotificationsForMany(
+    admins.map((admin) => admin.id),
+    {
+      type: "attendance",
+      title: "Student Joined Late",
+      message: `${studentName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
+      actionUrl: `/admin/attendance?classId=${attendance.classSession.class.id}&date=${dateParam}`,
+      entityType: "attendance",
+      entityId: attendance.id,
+    }
+  )
 }
 
 export async function notifyTeacherLateJoin(
@@ -523,14 +573,41 @@ export async function notifyTeacherLateJoin(
       classSession: {
         include: {
           class: {
-            select: {
-              id: true,
-              academyId: true,
-              name: true,
+            include: {
               course: {
                 select: {
                   code: true,
                   name: true,
+                },
+              },
+              enrollments: {
+                where: {
+                  status: "active",
+                },
+                select: {
+                  studentProfile: {
+                    select: {
+                      id: true,
+                      user: {
+                        select: {
+                          id: true,
+                        },
+                      },
+                      parentLinks: {
+                        select: {
+                          parentProfile: {
+                            select: {
+                              user: {
+                                select: {
+                                  id: true,
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -558,6 +635,15 @@ export async function notifyTeacherLateJoin(
   const className = `${teacherJoin.classSession.class.course.code}: ${teacherJoin.classSession.class.name}`
   const sessionDate = teacherJoin.classSession.sessionDate.toLocaleDateString()
   const dateParam = teacherJoin.classSession.sessionDate.toISOString().slice(0, 10)
+  const studentUserIds = teacherJoin.classSession.class.enrollments.map(
+    (enrollment) => enrollment.studentProfile.user.id
+  )
+  const parentUserIds = teacherJoin.classSession.class.enrollments.flatMap(
+    (enrollment) =>
+      enrollment.studentProfile.parentLinks.map(
+        (link) => link.parentProfile.user.id
+      )
+  )
 
   await createNotificationsForMany(
     admins.map((admin) => admin.id),
@@ -570,6 +656,24 @@ export async function notifyTeacherLateJoin(
       entityId: teacherJoin.classSession.id,
     }
   )
+
+  await createNotificationsForMany(studentUserIds, {
+    type: "attendance",
+    title: "Teacher Joined Late",
+    message: `${teacherName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
+    actionUrl: `/student/classes/${teacherJoin.classSession.class.id}`,
+    entityType: "session",
+    entityId: teacherJoin.classSession.id,
+  })
+
+  await createNotificationsForMany(parentUserIds, {
+    type: "attendance",
+    title: "Teacher Joined Late",
+    message: `${teacherName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
+    actionUrl: "/parent/attendance",
+    entityType: "session",
+    entityId: teacherJoin.classSession.id,
+  })
 }
 
 function getPayrollActionUrlForRole(role: Role, recordId: string) {

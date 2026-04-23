@@ -369,6 +369,7 @@ model ClassSession {
   endTime         DateTime        @map("end_time")
   meetingLink     String?         @map("meeting_link")
   meetingPlatform MeetingPlatform @default(in_person) @map("meeting_platform")
+  generatedFromSchedule Boolean   @default(false) @map("generated_from_schedule")
   status          SessionStatus   @default(scheduled)
   recordingUrl    String?         @map("recording_url")
 

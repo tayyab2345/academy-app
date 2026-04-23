@@ -25,6 +25,10 @@ export function AttendanceRecordsTable({
   showStudent = false,
   showMarkedBy = false,
 }: AttendanceRecordsTableProps) {
+  const showJoinDetails = records.some(
+    (record) => record.joinTime || (record.lateMinutes || 0) > 0
+  )
+
   if (records.length === 0) {
     return (
       <div className="py-8 text-center text-sm text-muted-foreground">
@@ -42,6 +46,7 @@ export function AttendanceRecordsTable({
             <TableHead>Date</TableHead>
             <TableHead>Class</TableHead>
             <TableHead>Status</TableHead>
+            {showJoinDetails ? <TableHead>Join Details</TableHead> : null}
             {showMarkedBy ? <TableHead>Marked By</TableHead> : null}
           </TableRow>
         </TableHeader>
@@ -96,6 +101,27 @@ export function AttendanceRecordsTable({
                     {statusBadge.label}
                   </Badge>
                 </TableCell>
+                {showJoinDetails ? (
+                  <TableCell>
+                    {record.joinTime ? (
+                      <div>
+                        <p className="text-sm font-medium">
+                          {new Date(record.joinTime).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {(record.lateMinutes || 0) > 0
+                            ? `${record.lateMinutes} minute${record.lateMinutes === 1 ? "" : "s"} late`
+                            : "On time"}
+                        </p>
+                      </div>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
+                ) : null}
                 {showMarkedBy ? (
                   <TableCell>
                     {record.markedBy ? (

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import {
   calculateAttendanceStatus,
   getEffectiveSessionMeetingSettings,
+  getSessionJoinWindowState,
 } from "@/lib/attendance-utils"
 import { notifyStudentLateJoin } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
@@ -36,6 +37,7 @@ export async function POST(
         id: true,
         classId: true,
         startTime: true,
+        endTime: true,
         status: true,
         meetingLink: true,
         meetingPlatform: true,
@@ -79,6 +81,12 @@ export async function POST(
       )
     }
 
+    const joinWindow = getSessionJoinWindowState({
+      startTime: classSession.startTime,
+      endTime: classSession.endTime,
+      status: classSession.status,
+    })
+
     const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
       sessionMeetingPlatform: classSession.meetingPlatform,
       sessionMeetingLink: classSession.meetingLink,
@@ -120,6 +128,15 @@ export async function POST(
         meetingLink: effectiveMeetingSettings.link,
         meetingPlatform: effectiveMeetingSettings.platform,
       })
+    }
+
+    if (!joinWindow.isVisible) {
+      return NextResponse.json(
+        {
+          error: "Join will be available shortly before the scheduled class time.",
+        },
+        { status: 400 }
+      )
     }
 
     const joinTime = new Date()

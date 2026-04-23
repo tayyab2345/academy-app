@@ -1,3 +1,4 @@
+import { syncRecurringSessionsForClass } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import {
   AttendanceDaySessionCandidate,
@@ -14,6 +15,13 @@ export type AttendanceSummaryCounts = {
   late: number
   excused: number
   unmarked: number
+}
+
+export type AttendanceLateJoinInsights = {
+  weekCount: number
+  monthCount: number
+  weekMinutes: number
+  monthMinutes: number
 }
 
 export type AttendanceRecordListItem = {
@@ -140,6 +148,7 @@ export type StudentAttendancePageData = {
     lastName: string
   }
   summary: AttendanceSummaryCounts
+  lateJoinInsights: AttendanceLateJoinInsights
   attendanceRate: number | null
   classBreakdown: Array<{
     classId: string
@@ -161,6 +170,7 @@ export type ParentAttendancePageData = {
   }>
   selectedChildId: string
   summary: AttendanceSummaryCounts
+  lateJoinInsights: AttendanceLateJoinInsights
   attendanceRate: number | null
   childBreakdown: Array<{
     child: {
@@ -182,6 +192,15 @@ function createEmptySummary(): AttendanceSummaryCounts {
     late: 0,
     excused: 0,
     unmarked: 0,
+  }
+}
+
+function createEmptyLateJoinInsights(): AttendanceLateJoinInsights {
+  return {
+    weekCount: 0,
+    monthCount: 0,
+    weekMinutes: 0,
+    monthMinutes: 0,
   }
 }
 
@@ -221,6 +240,55 @@ function buildAttendanceSummaryFromStudents(students: AttendanceStudentRow[]) {
 
     return addStatusToSummary(summary, student.attendance.status)
   }, createEmptySummary())
+}
+
+function startOfWeek(date: Date) {
+  const next = new Date(date)
+  const day = next.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  next.setDate(next.getDate() + diff)
+  next.setHours(0, 0, 0, 0)
+  return next
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0)
+}
+
+function buildLateJoinInsights(
+  records: Array<{
+    lateMinutes: number | null
+    classSession: {
+      sessionDate: Date
+    }
+  }>
+) {
+  const insights = createEmptyLateJoinInsights()
+  const now = new Date()
+  const weekStart = startOfWeek(now)
+  const monthStart = startOfMonth(now)
+
+  for (const record of records) {
+    const lateMinutes = record.lateMinutes || 0
+
+    if (lateMinutes <= 0) {
+      continue
+    }
+
+    const sessionDate = record.classSession.sessionDate
+
+    if (sessionDate >= weekStart) {
+      insights.weekCount += 1
+      insights.weekMinutes += lateMinutes
+    }
+
+    if (sessionDate >= monthStart) {
+      insights.monthCount += 1
+      insights.monthMinutes += lateMinutes
+    }
+  }
+
+  return insights
 }
 
 function mapHistorySessions(
@@ -308,6 +376,8 @@ export async function getAdminAttendancePageData(input: {
 
   const classInfo = classOptions.find((classItem) => classItem.id === selectedClassId) || null
   const { start, end } = getTeacherAttendanceDayBounds(selectedDate)
+
+  await syncRecurringSessionsForClass(selectedClassId)
 
   const [enrollments, daySessions, historySessions] = await Promise.all([
     prisma.enrollment.findMany({
@@ -541,6 +611,8 @@ export async function getStudentAttendancePageData(
     select: {
       id: true,
       status: true,
+      joinTime: true,
+      lateMinutes: true,
       markedAt: true,
       classSession: {
         select: {
@@ -585,6 +657,7 @@ export async function getStudentAttendancePageData(
   })
 
   const summary = buildAttendanceSummaryFromStatuses(attendanceRecords)
+  const lateJoinInsights = buildLateJoinInsights(attendanceRecords)
   const classBreakdownMap = new Map<
     string,
     {
@@ -624,6 +697,7 @@ export async function getStudentAttendancePageData(
       lastName: studentProfile.user.lastName,
     },
     summary,
+    lateJoinInsights,
     attendanceRate: calculateAttendanceRate(summary),
     classBreakdown: Array.from(classBreakdownMap.values()).sort((left, right) =>
       `${left.courseCode}-${left.className}`.localeCompare(
@@ -635,8 +709,8 @@ export async function getStudentAttendancePageData(
       status: record.status,
       date: record.classSession.sessionDate.toISOString(),
       markedAt: record.markedAt.toISOString(),
-      joinTime: null,
-      lateMinutes: null,
+      joinTime: record.joinTime?.toISOString() || null,
+      lateMinutes: record.lateMinutes,
       sessionTitle: record.classSession.title,
       class: {
         id: record.classSession.class.id,
@@ -720,6 +794,7 @@ export async function getParentAttendancePageData(input: {
       children,
       selectedChildId,
       summary: createEmptySummary(),
+      lateJoinInsights: createEmptyLateJoinInsights(),
       attendanceRate: null,
       childBreakdown: [],
       recentRecords: [],
@@ -735,6 +810,8 @@ export async function getParentAttendancePageData(input: {
     select: {
       id: true,
       status: true,
+      joinTime: true,
+      lateMinutes: true,
       markedAt: true,
       studentProfile: {
         select: {
@@ -791,6 +868,7 @@ export async function getParentAttendancePageData(input: {
   })
 
   const summary = buildAttendanceSummaryFromStatuses(attendanceRecords)
+  const lateJoinInsights = buildLateJoinInsights(attendanceRecords)
   const childBreakdownMap = new Map<
     string,
     {
@@ -828,6 +906,7 @@ export async function getParentAttendancePageData(input: {
     children,
     selectedChildId,
     summary,
+    lateJoinInsights,
     attendanceRate: calculateAttendanceRate(summary),
     childBreakdown: Array.from(childBreakdownMap.values()).sort((left, right) =>
       `${left.child.firstName} ${left.child.lastName}`.localeCompare(
@@ -839,8 +918,8 @@ export async function getParentAttendancePageData(input: {
       status: record.status,
       date: record.classSession.sessionDate.toISOString(),
       markedAt: record.markedAt.toISOString(),
-      joinTime: null,
-      lateMinutes: null,
+      joinTime: record.joinTime?.toISOString() || null,
+      lateMinutes: record.lateMinutes,
       sessionTitle: record.classSession.title,
       class: {
         id: record.classSession.class.id,

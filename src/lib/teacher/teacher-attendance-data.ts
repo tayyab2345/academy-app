@@ -1,3 +1,4 @@
+import { syncRecurringSessionsForClass } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import { buildDateTimeFromDateInputAndTime } from "@/lib/class-schedule"
 
@@ -312,6 +313,8 @@ export async function getTeacherAttendancePageData(input: {
     return null
   }
 
+  await syncRecurringSessionsForClass(selectedClassId)
+
   const { start, end } = getTeacherAttendanceDayBounds(selectedDate)
 
   const [enrollments, daySessions] = await Promise.all([
@@ -481,6 +484,8 @@ export async function getTeacherAttendanceSaveContext(input: {
     return null
   }
 
+  await syncRecurringSessionsForClass(input.classId)
+
   const { start, end } = getTeacherAttendanceDayBounds(input.dateInput)
 
   const [activeEnrollments, daySessions] = await Promise.all([
@@ -555,6 +560,7 @@ export function buildTeacherManualAttendanceSession(input: {
     startTime,
     endTime,
     meetingPlatform: "in_person" as const,
+    generatedFromSchedule: true,
     status: getManualSessionStatus(input.dateInput) as
       | "scheduled"
       | "ongoing"

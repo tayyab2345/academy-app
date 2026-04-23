@@ -7,6 +7,7 @@ import {
 } from "@/lib/admin/admin-data"
 import { getAdminClassesPageData } from "@/lib/admin/admin-lists-data"
 import { syncClassEnrollmentAssignments } from "@/lib/class-enrollment"
+import { syncRecurringSessionsForClass } from "@/lib/class-session-schedule"
 import { syncPrimaryTeacherAssignment } from "@/lib/class-teacher-assignment"
 import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { prisma } from "@/lib/prisma"
@@ -234,6 +235,8 @@ export async function POST(req: NextRequest) {
         },
       },
     })
+
+    await syncRecurringSessionsForClass(createdClassId)
 
     return NextResponse.json({ class: classData }, { status: 201 })
   } catch (error) {
