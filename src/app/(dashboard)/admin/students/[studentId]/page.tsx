@@ -692,7 +692,7 @@ export default async function StudentDetailPage({
                               </div>
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <Calendar className="h-4 w-4" />
-                                <span>{enrollment.class.academicYear}</span>
+                                <span>{enrollment.class.academicYear || "Academic year not set"}</span>
                               </div>
                             </div>
 

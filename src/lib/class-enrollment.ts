@@ -4,7 +4,7 @@ interface SyncClassEnrollmentAssignmentsInput {
   tx: Prisma.TransactionClient
   academyId: string
   classId: string
-  gradeLevel: string
+  gradeLevel?: string | null
   studentProfileIds: string[]
 }
 
@@ -26,7 +26,7 @@ export async function syncClassEnrollmentAssignments({
             id: {
               in: uniqueStudentProfileIds,
             },
-            gradeLevel,
+            ...(gradeLevel ? { gradeLevel } : {}),
             user: {
               academyId,
               role: "student",
@@ -41,7 +41,7 @@ export async function syncClassEnrollmentAssignments({
 
   if (selectedStudents.length !== uniqueStudentProfileIds.length) {
     throw new Error(
-      "One or more selected students could not be assigned. Check academy ownership, grade level, and active status."
+      "One or more selected students could not be assigned. Check academy ownership, grade level rules, and active status."
     )
   }
 

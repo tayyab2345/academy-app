@@ -47,7 +47,9 @@ export async function POST(
     const students = await prisma.studentProfile.findMany({
       where: {
         id: { in: validated.data.studentIds },
-        gradeLevel: classData.course.gradeLevel,
+        ...(classData.course.gradeLevel
+          ? { gradeLevel: classData.course.gradeLevel }
+          : {}),
         user: {
           academyId: session.user.academyId,
           role: "student",
@@ -68,7 +70,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "One or more students could not be enrolled. Check academy ownership and grade level.",
+            "One or more students could not be enrolled. Check academy ownership and grade level rules.",
         },
         { status: 400 }
       )

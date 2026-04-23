@@ -48,21 +48,14 @@ const meetingPlatforms = [
   { value: "teams", label: "Microsoft Teams" },
 ] as const
 
-const academicYears = [
-  "2023-2024",
-  "2024-2025",
-  "2025-2026",
-  "2026-2027",
-]
-
 const formSchema = z
   .object({
     courseId: z.string().min(1, "Course is required"),
     name: z.string().min(2, "Class name must be at least 2 characters"),
     section: z.string().optional(),
-    academicYear: z.string().min(1, "Academic year is required"),
-    startDate: z.string().min(1, "Start date is required"),
-    endDate: z.string().min(1, "End date is required"),
+    academicYear: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
     teacherProfileId: z.string().optional(),
     scheduleDays: z.array(z.enum(CLASS_WEEKDAY_VALUES)).default([]),
     scheduleStartTime: z.string().optional(),
@@ -84,7 +77,11 @@ const formSchema = z
     studentProfileIds: z.array(z.string()).default([]),
   })
   .superRefine((data, ctx) => {
-    if (new Date(data.endDate).getTime() < new Date(data.startDate).getTime()) {
+    if (
+      data.startDate &&
+      data.endDate &&
+      new Date(data.endDate).getTime() < new Date(data.startDate).getTime()
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "End date must be on or after the start date",
@@ -216,7 +213,7 @@ export function ClassForm({
       courseId: initialData?.courseId || "",
       name: initialData?.name || "",
       section: initialData?.section || "",
-      academicYear: initialData?.academicYear || "2024-2025",
+      academicYear: initialData?.academicYear || "",
       startDate: formatDateForInput(initialData?.startDate) || "",
       endDate: formatDateForInput(initialData?.endDate) || "",
       teacherProfileId: initialData?.teacherProfileId || "",
@@ -233,8 +230,8 @@ export function ClassForm({
   const teacherComboboxOptions = teacherOptions.map((teacher) => ({
     value: teacher.id,
     label: `${teacher.user.firstName} ${teacher.user.lastName}${
-      teacher.employeeId ? ` (${teacher.employeeId})` : ""
-    } - ${teacher.user.email}${teacher.user.isActive ? "" : " [Inactive]"}`,
+      teacher.user.isActive ? "" : " [Inactive]"
+    }`,
   }))
   const activeTeacherCount = teacherOptions.filter(
     (teacher) => teacher.user.isActive
@@ -252,7 +249,9 @@ export function ClassForm({
     }
 
     return studentOptions.filter(
-      (student) => student.gradeLevel === selectedCourse.gradeLevel
+      (student) =>
+        !selectedCourse.gradeLevel ||
+        student.gradeLevel === selectedCourse.gradeLevel
     )
   }, [selectedCourse, studentOptions])
 
@@ -372,7 +371,8 @@ export function ClassForm({
                     <SelectContent>
                       {courses.map((course) => (
                         <SelectItem key={course.id} value={course.id}>
-                          {course.code} - {course.name} ({course.gradeLevel})
+                          {course.code} - {course.name}
+                          {course.gradeLevel ? ` (${course.gradeLevel})` : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -457,25 +457,17 @@ export function ClassForm({
               name="academicYear"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Academic Year *</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    disabled={isLoading}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select academic year" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {academicYears.map((year) => (
-                        <SelectItem key={year} value={year}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Academic Year</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="2026-2027"
+                      disabled={isLoading}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Optional. Leave blank if you do not want to set an academic year.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -487,10 +479,13 @@ export function ClassForm({
                 name="startDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Date *</FormLabel>
+                    <FormLabel>Start Date</FormLabel>
                     <FormControl>
                       <Input type="date" disabled={isLoading} {...field} />
                     </FormControl>
+                    <FormDescription>
+                      Optional. Used for date-bounded class scheduling and reporting.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -500,10 +495,13 @@ export function ClassForm({
                 name="endDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>End Date *</FormLabel>
+                    <FormLabel>End Date</FormLabel>
                     <FormControl>
                       <Input type="date" disabled={isLoading} {...field} />
                     </FormControl>
+                    <FormDescription>
+                      Optional. Leave blank if this class has no defined end date yet.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -705,7 +703,9 @@ export function ClassForm({
                   <FormLabel>Assigned Students</FormLabel>
                   <FormDescription>
                     {selectedCourse
-                      ? `Only students in ${selectedCourse.gradeLevel} are shown for ${selectedCourse.code}.`
+                      ? selectedCourse.gradeLevel
+                        ? `Only students in ${selectedCourse.gradeLevel} are shown for ${selectedCourse.code}.`
+                        : `All active students are shown because ${selectedCourse.code} has no grade level set.`
                       : "Select a course first to load eligible students."}
                   </FormDescription>
                   <FormControl>
@@ -739,7 +739,9 @@ export function ClassForm({
                         </div>
                       ) : eligibleStudentOptions.length === 0 ? (
                         <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
-                          No active students are available in {selectedCourse.gradeLevel}.
+                          {selectedCourse.gradeLevel
+                            ? `No active students are available in ${selectedCourse.gradeLevel}.`
+                            : "No active students are available for this course."}
                         </div>
                       ) : (
                         <ScrollArea className="h-72 rounded-md border">

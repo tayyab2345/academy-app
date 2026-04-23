@@ -319,7 +319,10 @@ export default async function ClassDetailPage({
                 </p>
                 <p className="break-words font-medium">{classData.course.name}</p>
                 <p className="break-words text-sm text-muted-foreground">
-                  {classData.course.subjectArea} - {classData.course.gradeLevel}
+                  {classData.course.subjectArea}
+                  {classData.course.gradeLevel
+                    ? ` - ${classData.course.gradeLevel}`
+                    : ""}
                 </p>
               </div>
               <Separator />
@@ -327,7 +330,7 @@ export default async function ClassDetailPage({
                 <p className="text-sm font-medium text-muted-foreground">
                   Academic Year
                 </p>
-                <p>{classData.academicYear}</p>
+                <p>{classData.academicYear || "Not set"}</p>
               </div>
               <Separator />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -335,13 +338,21 @@ export default async function ClassDetailPage({
                   <p className="text-sm font-medium text-muted-foreground">
                     Start Date
                   </p>
-                  <p>{new Date(classData.startDate).toLocaleDateString()}</p>
+                  <p>
+                    {classData.startDate
+                      ? new Date(classData.startDate).toLocaleDateString()
+                      : "Not set"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">
                     End Date
                   </p>
-                  <p>{new Date(classData.endDate).toLocaleDateString()}</p>
+                  <p>
+                    {classData.endDate
+                      ? new Date(classData.endDate).toLocaleDateString()
+                      : "Not set"}
+                  </p>
                 </div>
               </div>
             </CardContent>

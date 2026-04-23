@@ -23,7 +23,7 @@ const createCourseSchema = z.object({
   description: z.string().optional(),
   syllabusPdfUrl: z.string().trim().optional().nullable().or(z.literal("")),
   syllabusImageUrl: z.string().trim().optional().nullable().or(z.literal("")),
-  gradeLevel: z.string().min(1, "Grade level is required"),
+  gradeLevel: z.string().trim().optional(),
   subjectArea: z.string().min(2, "Subject area must be at least 2 characters"),
   isActive: z.boolean().default(true),
 })
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
         description: validated.data.description,
         syllabusPdfUrl,
         syllabusImageUrl,
-        gradeLevel: validated.data.gradeLevel,
+        gradeLevel: validated.data.gradeLevel || "",
         subjectArea: validated.data.subjectArea,
         isActive: validated.data.isActive,
       },

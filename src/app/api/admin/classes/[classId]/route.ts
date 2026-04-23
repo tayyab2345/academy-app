@@ -8,6 +8,17 @@ import { prisma } from "@/lib/prisma"
 import { CLASS_WEEKDAY_VALUES } from "@/lib/class-schedule"
 import { z } from "zod"
 
+const optionalDateInputSchema = z.preprocess(
+  (value) => {
+    if (value === "" || value === null || value === undefined) {
+      return null
+    }
+
+    return value
+  },
+  z.string().or(z.date()).nullable()
+)
+
 const teacherProfileIdSchema = z.preprocess(
   (value) => {
     if (value === "" || value === null || value === undefined) {
@@ -24,9 +35,9 @@ const updateClassSchema = z
     courseId: z.string().min(1).optional(),
     name: z.string().min(2).optional(),
     section: z.string().optional().nullable(),
-    academicYear: z.string().min(1).optional(),
-    startDate: z.string().or(z.date()).optional(),
-    endDate: z.string().or(z.date()).optional(),
+    academicYear: z.string().trim().optional(),
+    startDate: optionalDateInputSchema.optional(),
+    endDate: optionalDateInputSchema.optional(),
     status: z.enum(["active", "completed", "cancelled"]).optional(),
     scheduleDays: z.array(z.enum(CLASS_WEEKDAY_VALUES)).optional(),
     scheduleStartTime: z.string().optional().nullable(),
@@ -138,7 +149,7 @@ function mapClassUpdateError(error: unknown) {
   if (
     error.message === "Only active teachers can be assigned to a class" ||
     error.message ===
-      "One or more selected students could not be assigned. Check academy ownership, grade level, and active status."
+      "One or more selected students could not be assigned. Check academy ownership, grade level rules, and active status."
   ) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
@@ -262,14 +273,20 @@ export async function PATCH(
       )
     }
 
-    const startDate = validated.data.startDate
-      ? new Date(validated.data.startDate)
-      : existingClass.startDate
-    const endDate = validated.data.endDate
-      ? new Date(validated.data.endDate)
-      : existingClass.endDate
+    const startDate =
+      validated.data.startDate === undefined
+        ? existingClass.startDate
+        : validated.data.startDate
+          ? new Date(validated.data.startDate)
+          : null
+    const endDate =
+      validated.data.endDate === undefined
+        ? existingClass.endDate
+        : validated.data.endDate
+          ? new Date(validated.data.endDate)
+          : null
 
-    if (endDate.getTime() < startDate.getTime()) {
+    if (startDate && endDate && endDate.getTime() < startDate.getTime()) {
       return NextResponse.json(
         { error: "End date must be on or after the start date" },
         { status: 400 }
@@ -299,13 +316,20 @@ export async function PATCH(
             validated.data.section === undefined
               ? undefined
               : validated.data.section || null,
-          academicYear: validated.data.academicYear,
+          academicYear:
+            validated.data.academicYear === undefined
+              ? undefined
+              : validated.data.academicYear,
           startDate: validated.data.startDate
             ? new Date(validated.data.startDate)
-            : undefined,
+            : validated.data.startDate === null
+              ? null
+              : undefined,
           endDate: validated.data.endDate
             ? new Date(validated.data.endDate)
-            : undefined,
+            : validated.data.endDate === null
+              ? null
+              : undefined,
           status: validated.data.status,
           scheduleDays: validated.data.scheduleDays,
           scheduleStartTime:

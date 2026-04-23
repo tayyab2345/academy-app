@@ -27,32 +27,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { ImageUploadField } from "@/components/profile/image-upload-field"
 import { DocumentUploadField } from "@/components/uploads/document-upload-field"
-
-const gradeLevels = [
-  "Pre-K",
-  "Kindergarten",
-  "Grade 1",
-  "Grade 2",
-  "Grade 3",
-  "Grade 4",
-  "Grade 5",
-  "Grade 6",
-  "Grade 7",
-  "Grade 8",
-  "Grade 9",
-  "Grade 10",
-  "Grade 11",
-  "Grade 12",
-]
 
 const formSchema = z.object({
   code: z.string().min(2, "Course code must be at least 2 characters"),
@@ -60,7 +36,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   syllabusPdfUrl: z.string().nullable().optional(),
   syllabusImageUrl: z.string().nullable().optional(),
-  gradeLevel: z.string().min(1, "Grade level is required"),
+  gradeLevel: z.string().optional(),
   subjectArea: z.string().min(2, "Subject area must be at least 2 characters"),
   isActive: z.boolean().default(true),
 })
@@ -156,25 +132,17 @@ export function CourseForm({ initialData, isEditing = false }: CourseFormProps) 
                 name="gradeLevel"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Grade Level *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      disabled={isLoading}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select grade level" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {gradeLevels.map((grade) => (
-                          <SelectItem key={grade} value={grade}>
-                            {grade}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Grade Level</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Grade 5, Hifz Batch, Beginner, etc."
+                        disabled={isLoading}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Optional. You can type any custom grade or level label.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

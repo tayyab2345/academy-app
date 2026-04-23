@@ -95,7 +95,7 @@ export function EnrollStudentsDialog({
     try {
       const params = new URLSearchParams()
       if (searchQuery) params.set("search", searchQuery)
-      params.set("gradeLevel", courseGradeLevel)
+      if (courseGradeLevel) params.set("gradeLevel", courseGradeLevel)
       params.set("limit", "100")
 
       const response = await fetch(`/api/admin/students?${params.toString()}`)
@@ -171,7 +171,9 @@ export function EnrollStudentsDialog({
         <DialogHeader>
           <DialogTitle>Enroll Students</DialogTitle>
           <DialogDescription>
-            Enroll students into this class. Only students in {courseGradeLevel} are shown.
+            {courseGradeLevel
+              ? `Enroll students into this class. Only students in ${courseGradeLevel} are shown.`
+              : "Enroll students into this class. All active students are available because no grade level is set for this course."}
           </DialogDescription>
         </DialogHeader>
 
@@ -232,9 +234,17 @@ export function EnrollStudentsDialog({
                         </div>
                       ) : students.length === 0 ? (
                         <div className="py-8 text-center text-muted-foreground">
-                          <p>No available students found in {courseGradeLevel}</p>
+                          <p>
+                            {courseGradeLevel
+                              ? `No available students found in ${courseGradeLevel}`
+                              : "No available students found"}
+                          </p>
                           <p className="mt-1 text-sm">
-                            {searchQuery ? "Try a different search" : "All students in this grade may already be enrolled"}
+                            {searchQuery
+                              ? "Try a different search"
+                              : courseGradeLevel
+                                ? "All students in this grade may already be enrolled"
+                                : "All available students may already be enrolled"}
                           </p>
                         </div>
                       ) : (

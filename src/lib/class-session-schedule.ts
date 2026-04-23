@@ -17,8 +17,8 @@ type SyncRecurringSessionsOptions = {
 type SchedulableClass = {
   id: string
   name: string
-  startDate: Date
-  endDate: Date
+  startDate: Date | null
+  endDate: Date | null
   scheduleDays: string[]
   scheduleStartTime: string | null
   scheduleEndTime: string | null
@@ -185,10 +185,19 @@ export async function syncRecurringSessionsForClass(
 
   if (hasConfiguredClassSchedule(classData)) {
     const effectiveStart = new Date(
-      Math.max(startOfDay(classData.startDate).getTime(), syncWindowStart.getTime())
+      Math.max(
+        (classData.startDate
+          ? startOfDay(classData.startDate)
+          : syncWindowStart
+        ).getTime(),
+        syncWindowStart.getTime()
+      )
     )
     const effectiveEnd = new Date(
-      Math.min(endOfDay(classData.endDate).getTime(), syncWindowEnd.getTime())
+      Math.min(
+        (classData.endDate ? endOfDay(classData.endDate) : syncWindowEnd).getTime(),
+        syncWindowEnd.getTime()
+      )
     )
     const scheduleDaySet = new Set(sortClassScheduleDays(classData.scheduleDays))
 

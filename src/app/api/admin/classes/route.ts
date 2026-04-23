@@ -14,6 +14,17 @@ import { prisma } from "@/lib/prisma"
 import { CLASS_WEEKDAY_VALUES } from "@/lib/class-schedule"
 import { z } from "zod"
 
+const optionalDateInputSchema = z.preprocess(
+  (value) => {
+    if (value === "" || value === null || value === undefined) {
+      return null
+    }
+
+    return value
+  },
+  z.string().or(z.date()).nullable()
+)
+
 const teacherProfileIdSchema = z.preprocess(
   (value) => {
     if (value === "" || value === null || value === undefined) {
@@ -30,9 +41,9 @@ const createClassSchema = z
     courseId: z.string().min(1, "Course is required"),
     name: z.string().min(2, "Class name must be at least 2 characters"),
     section: z.string().optional(),
-    academicYear: z.string().min(1, "Academic year is required"),
-    startDate: z.string().or(z.date()),
-    endDate: z.string().or(z.date()),
+    academicYear: z.string().trim().optional(),
+    startDate: optionalDateInputSchema,
+    endDate: optionalDateInputSchema,
     scheduleDays: z.array(z.enum(CLASS_WEEKDAY_VALUES)).default([]),
     scheduleStartTime: z.string().optional(),
     scheduleEndTime: z.string().optional(),
@@ -45,7 +56,11 @@ const createClassSchema = z
     teacherProfileId: teacherProfileIdSchema,
   })
   .superRefine((data, ctx) => {
-    if (new Date(data.endDate).getTime() < new Date(data.startDate).getTime()) {
+    if (
+      data.startDate &&
+      data.endDate &&
+      new Date(data.endDate).getTime() < new Date(data.startDate).getTime()
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "End date must be on or after the start date",
@@ -181,9 +196,11 @@ export async function POST(req: NextRequest) {
           courseId: validated.data.courseId,
           name: validated.data.name,
           section: validated.data.section || null,
-          academicYear: validated.data.academicYear,
-          startDate: new Date(validated.data.startDate),
-          endDate: new Date(validated.data.endDate),
+          academicYear: validated.data.academicYear || "",
+          startDate: validated.data.startDate
+            ? new Date(validated.data.startDate)
+            : null,
+          endDate: validated.data.endDate ? new Date(validated.data.endDate) : null,
           scheduleDays: validated.data.scheduleDays,
           scheduleStartTime: validated.data.scheduleStartTime || null,
           scheduleEndTime: validated.data.scheduleEndTime || null,
@@ -247,7 +264,7 @@ export async function POST(req: NextRequest) {
       (error.message === "Teacher not found" ||
         error.message === "Only active teachers can be assigned to a class" ||
         error.message ===
-          "One or more selected students could not be assigned. Check academy ownership, grade level, and active status.")
+          "One or more selected students could not be assigned. Check academy ownership, grade level rules, and active status.")
     ) {
       return NextResponse.json(
         { error: error.message },

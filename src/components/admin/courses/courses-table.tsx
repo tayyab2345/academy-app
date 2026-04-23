@@ -125,7 +125,7 @@ export function CoursesTable({
                 <TableRow key={course.id}>
                   <TableCell className="font-mono text-sm">{course.code}</TableCell>
                   <TableCell className="font-medium">{course.name}</TableCell>
-                  <TableCell>{course.gradeLevel}</TableCell>
+                  <TableCell>{course.gradeLevel || "Not set"}</TableCell>
                   <TableCell>{course.subjectArea}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">

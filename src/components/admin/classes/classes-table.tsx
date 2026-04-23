@@ -40,8 +40,8 @@ interface ClassRow {
   section: string | null
   academicYear: string
   status: string
-  startDate: string
-  endDate: string
+  startDate: string | null
+  endDate: string | null
   course: {
     id: string
     code: string
@@ -157,7 +157,7 @@ export function ClassesTable({
                       <p className="text-sm text-muted-foreground">{cls.course.name}</p>
                     </div>
                   </TableCell>
-                  <TableCell>{cls.academicYear}</TableCell>
+                  <TableCell>{cls.academicYear || "Not set"}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Users className="h-4 w-4 text-muted-foreground" />
@@ -173,9 +173,17 @@ export function ClassesTable({
                   <TableCell>{getStatusBadge(cls.status)}</TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      <p>{new Date(cls.startDate).toLocaleDateString()}</p>
+                      <p>
+                        {cls.startDate
+                          ? new Date(cls.startDate).toLocaleDateString()
+                          : "Not set"}
+                      </p>
                       <p className="text-muted-foreground">to</p>
-                      <p>{new Date(cls.endDate).toLocaleDateString()}</p>
+                      <p>
+                        {cls.endDate
+                          ? new Date(cls.endDate).toLocaleDateString()
+                          : "Not set"}
+                      </p>
                     </div>
                   </TableCell>
                   <TableCell>

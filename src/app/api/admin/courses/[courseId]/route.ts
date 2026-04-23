@@ -16,7 +16,7 @@ const updateCourseSchema = z.object({
   description: z.string().optional().nullable(),
   syllabusPdfUrl: z.string().trim().optional().nullable().or(z.literal("")),
   syllabusImageUrl: z.string().trim().optional().nullable().or(z.literal("")),
-  gradeLevel: z.string().min(1).optional(),
+  gradeLevel: z.string().trim().optional(),
   subjectArea: z.string().min(2).optional(),
   isActive: z.boolean().optional(),
 })
@@ -145,7 +145,10 @@ export async function PATCH(
           validated.data.syllabusImageUrl === undefined
             ? undefined
             : nextSyllabusImageUrl,
-        gradeLevel: validated.data.gradeLevel,
+        gradeLevel:
+          validated.data.gradeLevel === undefined
+            ? undefined
+            : validated.data.gradeLevel,
         subjectArea: validated.data.subjectArea,
         isActive: validated.data.isActive,
       },

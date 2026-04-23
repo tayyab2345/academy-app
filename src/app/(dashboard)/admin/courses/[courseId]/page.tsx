@@ -128,7 +128,7 @@ export default async function CourseDetailPage({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Grade Level</p>
-                  <p>{course.gradeLevel}</p>
+                  <p>{course.gradeLevel || "Not set"}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Subject Area</p>
@@ -210,7 +210,7 @@ export default async function CourseDetailPage({
                             <p className="text-sm text-muted-foreground">Section {cls.section}</p>
                           )}
                           <p className="mt-1 text-sm text-muted-foreground">
-                            {cls.academicYear}
+                            {cls.academicYear || "Academic year not set"}
                           </p>
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -220,7 +220,9 @@ export default async function CourseDetailPage({
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="h-4 w-4" />
-                            {new Date(cls.startDate).toLocaleDateString()}
+                            {cls.startDate
+                              ? new Date(cls.startDate).toLocaleDateString()
+                              : "Date not set"}
                           </span>
                           <Badge variant={cls.status === "active" ? "success" : "secondary"}>
                             {cls.status}

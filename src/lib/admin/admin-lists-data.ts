@@ -10,8 +10,8 @@ export type AdminClassListItem = {
   section: string | null
   academicYear: string
   status: string
-  startDate: string
-  endDate: string
+  startDate: string | null
+  endDate: string | null
   course: {
     id: string
     code: string
@@ -187,8 +187,8 @@ export async function getAdminClassesPageData(input: {
   return {
     classes: classes.map((classItem) => ({
       ...classItem,
-      startDate: classItem.startDate.toISOString(),
-      endDate: classItem.endDate.toISOString(),
+      startDate: classItem.startDate?.toISOString() || null,
+      endDate: classItem.endDate?.toISOString() || null,
     })),
     total,
     page: input.page,
