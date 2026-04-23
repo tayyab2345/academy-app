@@ -55,3 +55,115 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  @keyframes academy-splash-logo-in {
+    0% {
+      opacity: 0;
+      transform: translateY(16px) scale(0.9);
+      filter: blur(10px);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes academy-splash-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes academy-splash-copy-in {
+    0% {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes academy-splash-orb-float {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+
+    50% {
+      transform: translate3d(0, -12px, 0);
+    }
+  }
+
+  @keyframes academy-splash-overlay-out {
+    0% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    100% {
+      opacity: 0;
+      transform: scale(1.03);
+    }
+  }
+
+  @keyframes academy-splash-shell-out {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+
+    100% {
+      opacity: 0;
+      transform: translateY(-10px) scale(1.04);
+      filter: blur(6px);
+    }
+  }
+
+  .academy-splash-logo {
+    animation:
+      academy-splash-logo-in 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      academy-splash-float 3.8s ease-in-out 0.75s infinite;
+  }
+
+  .academy-splash-copy {
+    animation: academy-splash-copy-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  }
+
+  .academy-splash-orb {
+    animation: academy-splash-orb-float 5.4s ease-in-out infinite;
+  }
+
+  .academy-splash-orb-delay {
+    animation-delay: 0.45s;
+  }
+
+  .academy-splash-overlay-exit {
+    animation: academy-splash-overlay-out 0.55s ease forwards;
+  }
+
+  .academy-splash-shell-exit {
+    animation: academy-splash-shell-out 0.55s ease forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .academy-splash-logo,
+  .academy-splash-copy,
+  .academy-splash-orb,
+  .academy-splash-overlay-exit,
+  .academy-splash-shell-exit {
+    animation: none !important;
+  }
+}

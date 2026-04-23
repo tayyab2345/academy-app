@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import dynamic from "next/dynamic"
 import { getAppBaseUrl } from "@/lib/app-url"
+import { AppStartupSplash } from "@/components/branding/app-startup-splash"
 import { Providers } from "./providers"
 import "./globals.css"
 
@@ -30,6 +31,8 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", sizes: "64x64", type: "image/png" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
       { url: "/favicon.svg", type: "image/svg+xml" },
@@ -55,9 +58,9 @@ export default async function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body className="min-h-screen bg-[#f4fbf8] text-foreground antialiased">
         <Providers session={null}>
-          {children}
+          <AppStartupSplash>{children}</AppStartupSplash>
           <PWAInstallPrompt />
         </Providers>
       </body>

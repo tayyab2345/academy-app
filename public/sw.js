@@ -1,6 +1,8 @@
-const CACHE_NAME = "academyflow-pwa-v1";
+const CACHE_NAME = "academyflow-pwa-v2";
 const STATIC_ASSETS = [
   "/offline.html",
+  "/branding/academyflow-mark.png",
+  "/favicon.png",
   "/favicon.svg",
   "/icons/icon-192x192.png",
   "/icons/icon-512x512.png",
@@ -61,7 +63,9 @@ self.addEventListener("fetch", (event) => {
 
   const isStaticAsset =
     url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/branding/") ||
     url.pathname.startsWith("/icons/") ||
+    url.pathname === "/favicon.png" ||
     url.pathname === "/favicon.svg" ||
     url.pathname === "/manifest.webmanifest";
 
