@@ -1312,6 +1312,20 @@ model EmailVerification {
   @@map("email_verifications")
 }
 
+model StoredDocument {
+  id          String   @id @default(cuid())
+  path        String   @unique
+  fileName    String   @map("file_name")
+  contentType String   @map("content_type")
+  byteSize    Int      @map("byte_size")
+  content     Bytes
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@map("stored_documents")
+}
+
 enum EmailStatus {
   pending
   sent

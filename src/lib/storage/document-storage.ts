@@ -3,6 +3,17 @@ import path from "path"
 import { randomBytes } from "crypto"
 import { getStore } from "@netlify/blobs"
 import { del, get, head, put } from "@vercel/blob"
+import { prisma } from "@/lib/prisma"
+
+const IS_RAILWAY_RUNTIME = Boolean(
+  process.env.RAILWAY_ENVIRONMENT_ID ||
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_PUBLIC_DOMAIN
+)
+const HAS_PERSISTENT_LOCAL_STORAGE_PATH = Boolean(
+  process.env.DOCUMENT_STORAGE_PATH?.trim() ||
+    process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim()
+)
 
 const STORAGE_BASE_PATH = path.resolve(
   process.env.DOCUMENT_STORAGE_PATH ||
@@ -11,9 +22,36 @@ const STORAGE_BASE_PATH = path.resolve(
     path.join(process.cwd(), "storage", "documents")
 )
 
-const STORAGE_PROVIDER_NAME =
-  process.env.STORAGE_PROVIDER?.trim().toLowerCase() ||
-  (process.env.BLOB_READ_WRITE_TOKEN?.trim() ? "vercel_blob" : "local")
+function resolveStorageProviderName() {
+  const requestedProvider = process.env.STORAGE_PROVIDER?.trim().toLowerCase()
+
+  if (requestedProvider === "local") {
+    if (IS_RAILWAY_RUNTIME && !HAS_PERSISTENT_LOCAL_STORAGE_PATH) {
+      console.warn(
+        "[storage] STORAGE_PROVIDER=local without a mounted Railway volume is ephemeral. Falling back to persistent database storage."
+      )
+      return "database"
+    }
+
+    return "local"
+  }
+
+  if (requestedProvider) {
+    return requestedProvider
+  }
+
+  if (process.env.BLOB_READ_WRITE_TOKEN?.trim()) {
+    return "vercel_blob"
+  }
+
+  if (IS_RAILWAY_RUNTIME && !HAS_PERSISTENT_LOCAL_STORAGE_PATH) {
+    return "database"
+  }
+
+  return "local"
+}
+
+const STORAGE_PROVIDER_NAME = resolveStorageProviderName()
 const NETLIFY_BLOBS_STORE_NAME =
   process.env.NETLIFY_BLOBS_DOCUMENT_STORE?.trim() || "academy-documents"
 
@@ -122,6 +160,7 @@ export interface StoredDocumentFile {
   fileName: string
   filePath: string
   fileUrl: string
+  contentType?: string
 }
 
 export interface StorageResult {
@@ -154,6 +193,33 @@ function buildStoredDocumentLocation(filename: string) {
     storedFilename,
     relativePath,
   }
+}
+
+function normalizeStorageKey(filePath: string) {
+  const normalized = normalizeStoredRelativePath(toPosixPath(filePath))
+  return normalized ? normalized : null
+}
+
+function getMimeTypeForStoredFileName(fileName: string) {
+  const normalized = fileName.toLowerCase()
+
+  if (normalized.endsWith(".png")) {
+    return "image/png"
+  }
+
+  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) {
+    return "image/jpeg"
+  }
+
+  if (normalized.endsWith(".webp")) {
+    return "image/webp"
+  }
+
+  if (normalized.endsWith(".pdf")) {
+    return "application/pdf"
+  }
+
+  return "application/octet-stream"
 }
 
 class LocalStorageProvider implements StorageProvider {
@@ -228,6 +294,10 @@ class LocalStorageProvider implements StorageProvider {
       await fs.unlink(resolvedPath)
       return true
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return false
+      }
+
       console.error("Failed to delete file:", error)
       return false
     }
@@ -261,6 +331,7 @@ class LocalStorageProvider implements StorageProvider {
         fileName: path.basename(resolvedPath),
         filePath: resolvedPath,
         fileUrl: this.getUrl(resolvedPath),
+        contentType: getMimeTypeForStoredFileName(path.basename(resolvedPath)),
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -284,6 +355,206 @@ class LocalStorageProvider implements StorageProvider {
       await fs.access(resolvedPath)
       return true
     } catch {
+      return false
+    }
+  }
+}
+
+class DatabaseStorageProvider implements StorageProvider {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly localFallback: LocalStorageProvider
+  ) {}
+
+  private normalizePath(filePath: string) {
+    return normalizeStorageKey(filePath)
+  }
+
+  private toStoredDocumentFile(document: {
+    path: string
+    fileName: string
+    content: Uint8Array | Buffer
+    contentType: string
+  }): StoredDocumentFile {
+    return {
+      buffer: Buffer.from(document.content),
+      fileName: document.fileName,
+      filePath: document.path,
+      fileUrl: this.getUrl(document.path),
+      contentType: document.contentType,
+    }
+  }
+
+  private async readFromDatabase(filePath: string) {
+    return prisma.storedDocument.findUnique({
+      where: { path: filePath },
+      select: {
+        path: true,
+        fileName: true,
+        content: true,
+        contentType: true,
+      },
+    })
+  }
+
+  private async migrateLegacyLocalDocument(filePath: string) {
+    const legacyDocument = await this.localFallback.read(filePath)
+
+    if (!legacyDocument) {
+      return null
+    }
+
+    const contentType =
+      legacyDocument.contentType || "application/octet-stream"
+
+    const storedDocument = await prisma.storedDocument.upsert({
+      where: { path: filePath },
+      update: {
+        fileName: legacyDocument.fileName,
+        contentType,
+        byteSize: legacyDocument.buffer.length,
+        content: legacyDocument.buffer,
+      },
+      create: {
+        path: filePath,
+        fileName: legacyDocument.fileName,
+        contentType,
+        byteSize: legacyDocument.buffer.length,
+        content: legacyDocument.buffer,
+      },
+      select: {
+        path: true,
+        fileName: true,
+        content: true,
+        contentType: true,
+      },
+    })
+
+    return this.toStoredDocumentFile(storedDocument)
+  }
+
+  async upload(
+    buffer: Buffer,
+    filename: string,
+    contentType: string
+  ): Promise<StorageResult> {
+    try {
+      const { storedFilename, relativePath } = buildStoredDocumentLocation(
+        filename
+      )
+
+      if (!relativePath) {
+        return {
+          success: false,
+          filePath: "",
+          fileUrl: "",
+          fileName: "",
+          error: "Invalid file path",
+        }
+      }
+
+      await prisma.storedDocument.create({
+        data: {
+          path: relativePath,
+          fileName: storedFilename,
+          contentType,
+          byteSize: buffer.length,
+          content: buffer,
+        },
+      })
+
+      return {
+        success: true,
+        filePath: relativePath,
+        fileUrl: `${this.baseUrl}/${relativePath}`,
+        fileName: storedFilename,
+      }
+    } catch (error) {
+      console.error("Failed to upload file to database storage:", error)
+      return {
+        success: false,
+        filePath: "",
+        fileUrl: "",
+        fileName: "",
+        error: error instanceof Error ? error.message : "Upload failed",
+      }
+    }
+  }
+
+  async delete(filePath: string) {
+    const normalizedPath = this.normalizePath(filePath)
+
+    if (!normalizedPath) {
+      return false
+    }
+
+    try {
+      await prisma.storedDocument.delete({
+        where: { path: normalizedPath },
+      })
+    } catch (error) {
+      const code = (error as { code?: string } | null)?.code
+
+      if (code !== "P2025") {
+        console.error("Failed to delete document from database storage:", error)
+        return false
+      }
+    }
+
+    await this.localFallback.delete(normalizedPath)
+    return true
+  }
+
+  getUrl(filePath: string) {
+    const normalizedPath = this.normalizePath(filePath)
+
+    if (!normalizedPath) {
+      throw new Error("Invalid stored document path")
+    }
+
+    return `${this.baseUrl}/${normalizedPath}`
+  }
+
+  async read(filePath: string): Promise<StoredDocumentFile | null> {
+    const normalizedPath = this.normalizePath(filePath)
+
+    if (!normalizedPath) {
+      return null
+    }
+
+    try {
+      const storedDocument = await this.readFromDatabase(normalizedPath)
+
+      if (storedDocument) {
+        return this.toStoredDocumentFile(storedDocument)
+      }
+
+      return this.migrateLegacyLocalDocument(normalizedPath)
+    } catch (error) {
+      console.error("Failed to read stored document from database storage:", error)
+      return null
+    }
+  }
+
+  async exists(filePath: string) {
+    const normalizedPath = this.normalizePath(filePath)
+
+    if (!normalizedPath) {
+      return false
+    }
+
+    try {
+      const count = await prisma.storedDocument.count({
+        where: { path: normalizedPath },
+      })
+
+      if (count > 0) {
+        return true
+      }
+
+      return this.localFallback.exists(normalizedPath)
+    } catch (error) {
+      console.error("Failed to check database storage document:", error)
       return false
     }
   }
@@ -405,6 +676,10 @@ class NetlifyBlobsStorageProvider implements StorageProvider {
         fileName: storedFileName,
         filePath: key,
         fileUrl: this.getUrl(key),
+        contentType:
+          typeof blob.metadata?.contentType === "string"
+            ? blob.metadata.contentType
+            : getMimeTypeForStoredFileName(storedFileName),
       }
     } catch (error) {
       console.error("Failed to read Netlify blob:", error)
@@ -535,6 +810,8 @@ class VercelBlobStorageProvider implements StorageProvider {
         fileName,
         filePath: blob.blob.pathname,
         fileUrl: this.getUrl(blob.blob.pathname),
+        contentType:
+          blob.blob.contentType || getMimeTypeForStoredFileName(fileName),
       }
     } catch (error) {
       console.error("Failed to read Vercel blob:", error)
@@ -563,8 +840,18 @@ let storageProvider: StorageProvider | null = null
 
 export function getStorageProvider() {
   if (!storageProvider) {
+    const localStorageProvider = new LocalStorageProvider(
+      STORAGE_BASE_PATH,
+      STORAGE_BASE_URL
+    )
+
     if (STORAGE_PROVIDER_NAME === "local") {
-      storageProvider = new LocalStorageProvider(STORAGE_BASE_PATH, STORAGE_BASE_URL)
+      storageProvider = localStorageProvider
+    } else if (STORAGE_PROVIDER_NAME === "database") {
+      storageProvider = new DatabaseStorageProvider(
+        STORAGE_BASE_URL,
+        localStorageProvider
+      )
     } else if (STORAGE_PROVIDER_NAME === "netlify_blobs") {
       storageProvider = new NetlifyBlobsStorageProvider(
         STORAGE_BASE_URL,
@@ -576,8 +863,14 @@ export function getStorageProvider() {
       console.warn(
         `Unknown storage provider: ${STORAGE_PROVIDER_NAME}, falling back to local storage`
       )
-      storageProvider = new LocalStorageProvider(STORAGE_BASE_PATH, STORAGE_BASE_URL)
+      storageProvider = localStorageProvider
     }
+
+    console.info("[storage] initialized provider", {
+      provider: STORAGE_PROVIDER_NAME,
+      isRailwayRuntime: IS_RAILWAY_RUNTIME,
+      hasPersistentLocalStoragePath: HAS_PERSISTENT_LOCAL_STORAGE_PATH,
+    })
   }
 
   return storageProvider

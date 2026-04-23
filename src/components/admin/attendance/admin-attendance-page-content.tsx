@@ -17,7 +17,6 @@ import {
   getSessionStatusBadge,
 } from "@/lib/attendance-utils"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -99,7 +98,7 @@ export function AdminAttendancePageContent({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Attendance</h2>
         <p className="text-muted-foreground">
@@ -115,15 +114,15 @@ export function AdminAttendancePageContent({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-2 min-w-0">
               <Label htmlFor="admin-attendance-class">Class</Label>
               <Select
                 value={selectedClassId}
                 onValueChange={(value) => navigateWithParams(value, selectedDate)}
                 disabled={isNavigating}
               >
-                <SelectTrigger id="admin-attendance-class">
+                <SelectTrigger id="admin-attendance-class" className="w-full">
                   <SelectValue placeholder="Select a class" />
                 </SelectTrigger>
                 <SelectContent>
@@ -136,7 +135,7 @@ export function AdminAttendancePageContent({
               </Select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label htmlFor="admin-attendance-date">Date</Label>
               <Input
                 id="admin-attendance-date"
@@ -152,32 +151,36 @@ export function AdminAttendancePageContent({
 
           {classInfo ? (
             <div className="rounded-lg border bg-muted/20 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="font-semibold break-words">
                     {classInfo.name}
                     {classInfo.section ? ` (Section ${classInfo.section})` : ""}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="break-words text-sm text-muted-foreground">
                     {classInfo.course.code} - {classInfo.course.name}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {formatLateThresholdLabel(classInfo.lateThresholdMinutes)}
                   </p>
                 </div>
-                <Badge variant={classInfo.status === "active" ? "success" : "secondary"}>
+                <Badge
+                  className="w-fit"
+                  variant={classInfo.status === "active" ? "success" : "secondary"}
+                >
                   {classInfo.status}
                 </Badge>
               </div>
 
               {attendanceSession ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <span>
+                <div className="mt-3 flex flex-wrap items-start gap-2 text-sm text-muted-foreground">
+                  <span className="min-w-0 break-words">
                     Reviewing attendance from{" "}
                     {attendanceSession.title || "session record"} on{" "}
                     {new Date(attendanceSession.sessionDate).toLocaleDateString()}
                   </span>
                   <Badge
+                    className="w-fit"
                     variant={getSessionStatusBadge(attendanceSession.status).variant as any}
                   >
                     {getSessionStatusBadge(attendanceSession.status).label}
@@ -193,7 +196,7 @@ export function AdminAttendancePageContent({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <SummaryCard title="Students" value={summary.total} />
         <SummaryCard title="Present" value={summary.present} tone="success" />
         <SummaryCard title="Late" value={summary.late} tone="warning" />
@@ -202,8 +205,8 @@ export function AdminAttendancePageContent({
         <SummaryCard title="Unmarked" value={summary.unmarked} tone="muted" />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
-        <Card>
+      <div className="grid items-start gap-6 xl:grid-cols-[1.3fr_0.9fr]">
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -219,72 +222,147 @@ export function AdminAttendancePageContent({
                 No active students are enrolled in this class.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Student ID</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Joined At</TableHead>
-                      <TableHead>Late Minutes</TableHead>
-                      <TableHead>Marked At</TableHead>
-                      <TableHead>Marked By</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {students.map((student) => {
-                      const badge = student.attendance
-                        ? getAttendanceStatusBadge(student.attendance.status)
-                        : null
+              <div className="space-y-3">
+                <div className="space-y-3 md:hidden">
+                  {students.map((student) => {
+                    const badge = student.attendance
+                      ? getAttendanceStatusBadge(student.attendance.status)
+                      : null
 
-                      return (
-                        <TableRow key={student.studentProfile.id}>
-                          <TableCell className="font-medium">
-                            {student.studentProfile.user.firstName}{" "}
-                            {student.studentProfile.user.lastName}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {student.studentProfile.studentId}
-                          </TableCell>
-                          <TableCell>
+                    return (
+                      <div
+                        key={student.studentProfile.id}
+                        className="rounded-lg border p-4"
+                      >
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-col gap-2">
+                            <div className="min-w-0">
+                              <p className="break-words font-medium">
+                                {student.studentProfile.user.firstName}{" "}
+                                {student.studentProfile.user.lastName}
+                              </p>
+                              <p className="break-all font-mono text-xs text-muted-foreground">
+                                {student.studentProfile.studentId}
+                              </p>
+                            </div>
                             {badge ? (
-                              <Badge variant={badge.variant as any}>
+                              <Badge className="w-fit" variant={badge.variant as any}>
                                 {badge.label}
                               </Badge>
                             ) : (
-                              <Badge variant="outline">Unmarked</Badge>
+                              <Badge className="w-fit" variant="outline">
+                                Unmarked
+                              </Badge>
                             )}
-                          </TableCell>
-                          <TableCell>
-                            {student.attendance?.joinTime
-                              ? new Date(student.attendance.joinTime).toLocaleString()
-                              : "-"}
-                          </TableCell>
-                          <TableCell>
-                            {student.attendance?.lateMinutes ?? "-"}
-                          </TableCell>
-                          <TableCell>
-                            {student.attendance
-                              ? new Date(student.attendance.markedAt).toLocaleString()
-                              : "-"}
-                          </TableCell>
-                          <TableCell>
-                            {student.attendance?.markedByTeacher
-                              ? `${student.attendance.markedByTeacher.user.firstName} ${student.attendance.markedByTeacher.user.lastName}`
-                              : "-"}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                          </div>
+
+                          <div className="grid gap-3 text-sm sm:grid-cols-2">
+                            <InfoPair
+                              label="Joined At"
+                              value={
+                                student.attendance?.joinTime
+                                  ? new Date(
+                                      student.attendance.joinTime
+                                    ).toLocaleString()
+                                  : "-"
+                              }
+                            />
+                            <InfoPair
+                              label="Late Minutes"
+                              value={String(student.attendance?.lateMinutes ?? "-")}
+                            />
+                            <InfoPair
+                              label="Marked At"
+                              value={
+                                student.attendance
+                                  ? new Date(
+                                      student.attendance.markedAt
+                                    ).toLocaleString()
+                                  : "-"
+                              }
+                            />
+                            <InfoPair
+                              label="Marked By"
+                              value={
+                                student.attendance?.markedByTeacher
+                                  ? `${student.attendance.markedByTeacher.user.firstName} ${student.attendance.markedByTeacher.user.lastName}`
+                                  : "-"
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="hidden md:block">
+                  <Table className="min-w-[760px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student</TableHead>
+                        <TableHead>Student ID</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Joined At</TableHead>
+                        <TableHead>Late Minutes</TableHead>
+                        <TableHead>Marked At</TableHead>
+                        <TableHead>Marked By</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {students.map((student) => {
+                        const badge = student.attendance
+                          ? getAttendanceStatusBadge(student.attendance.status)
+                          : null
+
+                        return (
+                          <TableRow key={student.studentProfile.id}>
+                            <TableCell className="font-medium">
+                              {student.studentProfile.user.firstName}{" "}
+                              {student.studentProfile.user.lastName}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {student.studentProfile.studentId}
+                            </TableCell>
+                            <TableCell>
+                              {badge ? (
+                                <Badge variant={badge.variant as any}>
+                                  {badge.label}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline">Unmarked</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {student.attendance?.joinTime
+                                ? new Date(student.attendance.joinTime).toLocaleString()
+                                : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {student.attendance?.lateMinutes ?? "-"}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {student.attendance
+                                ? new Date(student.attendance.markedAt).toLocaleString()
+                                : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {student.attendance?.markedByTeacher
+                                ? `${student.attendance.markedByTeacher.user.firstName} ${student.attendance.markedByTeacher.user.lastName}`
+                                : "-"}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -310,26 +388,26 @@ export function AdminAttendancePageContent({
                         key={teacherJoin.id}
                         className="rounded-lg border p-4"
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="break-words font-medium">
                               {teacherJoin.teacher.firstName}{" "}
                               {teacherJoin.teacher.lastName}
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="break-all text-sm text-muted-foreground">
                               {teacherJoin.teacher.email}
                             </p>
                           </div>
-                          <Badge variant={joinBadge.variant as any}>
+                          <Badge className="w-fit" variant={joinBadge.variant as any}>
                             {joinBadge.label}
                           </Badge>
                         </div>
-                        <div className="mt-3 text-sm text-muted-foreground">
-                          <p>
+                        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                          <p className="break-words">
                             Joined at{" "}
                             {new Date(teacherJoin.joinTime).toLocaleString()}
                           </p>
-                          <p>
+                          <p className="break-words">
                             {teacherJoin.lateMinutes > 0
                               ? `${teacherJoin.lateMinutes} minute${teacherJoin.lateMinutes === 1 ? "" : "s"} late`
                               : "Joined on time"}
@@ -375,12 +453,12 @@ export function AdminAttendancePageContent({
                         }
                         className="w-full rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
                             <p className="font-medium">
                               {new Date(historyItem.sessionDate).toLocaleDateString()}
                             </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
+                            <p className="mt-1 break-words text-sm text-muted-foreground">
                               {historyItem.title || "Session attendance"}
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -390,11 +468,11 @@ export function AdminAttendancePageContent({
                               <span>Excused {historyItem.summary.excused}</span>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <Badge variant={statusBadge.variant as any}>
+                          <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                            <Badge className="w-fit" variant={statusBadge.variant as any}>
                               {statusBadge.label}
                             </Badge>
-                            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <CalendarDays className="h-3 w-3" />
                               {new Date(historyItem.startTime).toLocaleTimeString([], {
                                 hour: "2-digit",
@@ -412,6 +490,22 @@ export function AdminAttendancePageContent({
           </Card>
         </div>
       </div>
+    </div>
+  )
+}
+
+interface InfoPairProps {
+  label: string
+  value: string
+}
+
+function InfoPair({ label, value }: InfoPairProps) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 break-words text-sm">{value}</p>
     </div>
   )
 }
@@ -441,7 +535,9 @@ function SummaryCard({
   return (
     <Card className={toneClassName}>
       <CardHeader className="space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="break-words text-sm font-medium">
+          {title}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-2xl font-semibold">{value}</p>
