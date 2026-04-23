@@ -45,7 +45,11 @@ export function UserNav({
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
+      <DropdownMenuContent
+        className="w-72 max-w-[calc(100vw-1rem)]"
+        align="end"
+        forceMount
+      >
         <DropdownMenuLabel className="font-normal">
           <div className="flex items-center gap-3">
             <UserAvatar
@@ -54,9 +58,11 @@ export function UserNav({
               avatarUrl={currentUser.avatarUrl}
               className="h-10 w-10"
             />
-            <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">{fullName}</p>
-              <p className="text-xs leading-none text-muted-foreground">
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="break-words text-sm font-medium leading-snug">
+                {fullName}
+              </p>
+              <p className="break-all text-xs leading-snug text-muted-foreground">
                 {currentUser.email}
               </p>
             </div>
