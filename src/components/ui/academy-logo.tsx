@@ -1,3 +1,4 @@
+import { School } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface AcademyLogoProps {
@@ -15,9 +16,8 @@ export function AcademyLogo({
   primaryColor,
   className,
   imageClassName,
+  iconClassName,
 }: AcademyLogoProps) {
-  const fallbackLogoSrc = "/branding/academyflow-mark.png"
-
   if (logoUrl) {
     return (
       <img
@@ -31,17 +31,16 @@ export function AcademyLogo({
   }
 
   return (
-    <img
-      src={fallbackLogoSrc}
-      alt={name || "AcademyFlow"}
+    <div
       className={cn(
-        "h-8 w-8 rounded-[0.9rem] object-cover shadow-[0_14px_30px_-18px_rgba(5,150,105,0.65)]",
-        className,
-        imageClassName
+        "flex h-8 w-8 items-center justify-center rounded-md",
+        className
       )}
-      loading="eager"
-      decoding="async"
-      style={primaryColor ? { backgroundColor: primaryColor } : undefined}
-    />
+      style={{
+        backgroundColor: primaryColor || "#059669",
+      }}
+    >
+      <School className={cn("h-5 w-5 text-white", iconClassName)} />
+    </div>
   )
 }

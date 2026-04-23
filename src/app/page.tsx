@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth"
 import { ArrowRight, BarChart3, Bell, CreditCard, FileText, GraduationCap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { AcademyLogo } from "@/components/ui/academy-logo"
 import { authOptions } from "@/lib/auth"
 import { getRoleRedirectPath } from "@/lib/role-redirect"
 import { HomeAuthGate } from "@/components/auth/home-auth-gate"
@@ -23,20 +22,9 @@ export default async function HomePage() {
           <div className="grid w-full gap-8 lg:grid-cols-[1.2fr_0.8fr]">
             <section className="space-y-8">
               <div className="space-y-4">
-                <div className="inline-flex items-center gap-3 rounded-full border border-emerald-100/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
-                  <AcademyLogo
-                    name="AcademyFlow"
-                    className="h-11 w-11 rounded-[1rem] shadow-none"
-                  />
-                  <div className="text-left">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/90">
-                      AcademyFlow
-                    </p>
-                    <p className="text-sm text-slate-600">
-                      Calm operations for modern academies
-                    </p>
-                  </div>
-                </div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary/90">
+                  AcademyFlow
+                </p>
                 <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
                   Run your academy from admissions to payroll in one clear workspace.
                 </h1>
