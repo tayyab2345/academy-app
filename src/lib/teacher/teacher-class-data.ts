@@ -38,6 +38,11 @@ export type TeacherClassSessionListItem = {
   meetingPlatform: string
   meetingLink: string | null
   status: string
+  teacherJoin: {
+    joinTime: string
+    status: "on_time" | "late"
+    lateMinutes: number
+  } | null
   _count: {
     attendances: number
   }
@@ -52,6 +57,8 @@ export type TeacherClassSessionsPageData = {
     scheduleStartTime: string | null
     scheduleEndTime: string | null
     scheduleRecurrence: string
+    defaultMeetingPlatform: string
+    defaultMeetingLink: string | null
     course: {
       code: string
       name: string
@@ -94,6 +101,8 @@ async function getTeacherActiveClassOptionsUncached(
           scheduleStartTime: true,
           scheduleEndTime: true,
           scheduleRecurrence: true,
+          defaultMeetingPlatform: true,
+          defaultMeetingLink: true,
           course: {
             select: {
               code: true,
@@ -158,6 +167,8 @@ export async function getTeacherClassesOverviewData(
           scheduleStartTime: true,
           scheduleEndTime: true,
           scheduleRecurrence: true,
+          defaultMeetingPlatform: true,
+          defaultMeetingLink: true,
           course: {
             select: {
               code: true,
@@ -242,6 +253,8 @@ export async function getTeacherClassSessionsPageData(input: {
           scheduleStartTime: true,
           scheduleEndTime: true,
           scheduleRecurrence: true,
+          defaultMeetingPlatform: true,
+          defaultMeetingLink: true,
           course: {
             select: {
               code: true,
@@ -275,6 +288,17 @@ export async function getTeacherClassSessionsPageData(input: {
         meetingPlatform: true,
         meetingLink: true,
         status: true,
+        teacherJoins: {
+          where: {
+            teacherProfileId: teacherProfile.id,
+          },
+          select: {
+            joinTime: true,
+            status: true,
+            lateMinutes: true,
+          },
+          take: 1,
+        },
         _count: {
           select: {
             attendances: true,
@@ -297,6 +321,13 @@ export async function getTeacherClassSessionsPageData(input: {
       sessionDate: session.sessionDate.toISOString(),
       startTime: session.startTime.toISOString(),
       endTime: session.endTime.toISOString(),
+      teacherJoin: session.teacherJoins[0]
+        ? {
+            joinTime: session.teacherJoins[0].joinTime.toISOString(),
+            status: session.teacherJoins[0].status,
+            lateMinutes: session.teacherJoins[0].lateMinutes,
+          }
+        : null,
     })),
     total,
     page: input.page,

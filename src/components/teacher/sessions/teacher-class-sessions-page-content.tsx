@@ -25,6 +25,8 @@ interface TeacherClassSessionsPageContentProps {
     scheduleStartTime: string | null
     scheduleEndTime: string | null
     scheduleRecurrence: string
+    defaultMeetingPlatform: string
+    defaultMeetingLink: string | null
     course: {
       code: string
       name: string
@@ -119,6 +121,8 @@ export function TeacherClassSessionsPageContent({
         <CardContent>
           <SessionsTable
             sessions={sessions}
+            classMeetingPlatform={classInfo.defaultMeetingPlatform}
+            classMeetingLink={classInfo.defaultMeetingLink}
             total={total}
             page={page}
             limit={limit}

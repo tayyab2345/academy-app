@@ -44,9 +44,13 @@ import {
 import {
   formatSessionDate,
   formatSessionTime,
+  getEffectiveSessionMeetingSettings,
+  getSessionJoinWindowState,
   getSessionStatusBadge,
+  SESSION_JOIN_LEAD_MINUTES,
   isSessionActive,
 } from "@/lib/attendance-utils"
+import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
 
 interface Session {
   id: string
@@ -57,6 +61,11 @@ interface Session {
   meetingPlatform: string
   meetingLink: string | null
   status: string
+  teacherJoin: {
+    joinTime: string
+    status: "on_time" | "late"
+    lateMinutes: number
+  } | null
   _count: {
     attendances: number
   }
@@ -64,6 +73,8 @@ interface Session {
 
 interface SessionsTableProps {
   sessions: Session[]
+  classMeetingPlatform: string
+  classMeetingLink: string | null
   total: number
   page: number
   limit: number
@@ -73,6 +84,8 @@ interface SessionsTableProps {
 
 export function SessionsTable({
   sessions,
+  classMeetingPlatform,
+  classMeetingLink,
   total,
   page,
   limit,
@@ -130,13 +143,14 @@ export function SessionsTable({
               <TableHead>Platform</TableHead>
               <TableHead>Attendance</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Join</TableHead>
               <TableHead className="w-[80px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sessions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={7} className="h-24 text-center">
                   No sessions found
                 </TableCell>
               </TableRow>
@@ -149,6 +163,13 @@ export function SessionsTable({
                 }
                 const statusBadge = getSessionStatusBadge(session.status)
                 const active = isSessionActive(sessionData)
+                const joinWindow = getSessionJoinWindowState(sessionData)
+                const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+                  sessionMeetingPlatform: session.meetingPlatform,
+                  sessionMeetingLink: session.meetingLink,
+                  classMeetingPlatform,
+                  classMeetingLink,
+                })
 
                 return (
                   <TableRow key={session.id}>
@@ -192,6 +213,24 @@ export function SessionsTable({
                         <Badge variant="success" className="ml-2">
                           Live Now
                         </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {joinWindow.isVisible ? (
+                        <TeacherJoinButton
+                          sessionId={session.id}
+                          sessionStatus={session.status}
+                          meetingPlatform={effectiveMeetingSettings.platform}
+                          meetingLink={effectiveMeetingSettings.link}
+                          initialJoin={session.teacherJoin}
+                          showMeta={false}
+                          align="start"
+                          className="w-full min-w-[140px]"
+                        />
+                      ) : (
+                        <p className="max-w-[180px] text-xs text-muted-foreground">
+                          Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes before start.
+                        </p>
                       )}
                     </TableCell>
                     <TableCell>

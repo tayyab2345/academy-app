@@ -81,6 +81,8 @@ async function getTeacherDashboardData(userId: string) {
                 scheduleStartTime: true,
                 scheduleEndTime: true,
                 scheduleRecurrence: true,
+                defaultMeetingPlatform: true,
+                defaultMeetingLink: true,
                 course: {
                   select: {
                     code: true,
@@ -108,8 +110,23 @@ async function getTeacherDashboardData(userId: string) {
                   take: 1,
                   select: {
                     id: true,
+                    title: true,
                     startTime: true,
+                    endTime: true,
                     status: true,
+                    meetingPlatform: true,
+                    meetingLink: true,
+                    teacherJoins: {
+                      where: {
+                        teacherProfileId: teacherProfile.id,
+                      },
+                      select: {
+                        joinTime: true,
+                        status: true,
+                        lateMinutes: true,
+                      },
+                      take: 1,
+                    },
                   },
                 },
               },
@@ -407,47 +424,108 @@ export default async function TeacherDashboardPage() {
               <div className="space-y-3">
                 {assignedClasses.slice(0, 4).map((assignment) => {
                   const nextSession = assignment.class.sessions[0]
+                  const joinWindow = nextSession
+                    ? getSessionJoinWindowState({
+                        startTime: nextSession.startTime,
+                        endTime: nextSession.endTime,
+                        status: nextSession.status,
+                      })
+                    : null
+                  const effectiveMeetingSettings = nextSession
+                    ? getEffectiveSessionMeetingSettings({
+                        sessionMeetingPlatform: nextSession.meetingPlatform,
+                        sessionMeetingLink: nextSession.meetingLink,
+                        classMeetingPlatform:
+                          assignment.class.defaultMeetingPlatform,
+                        classMeetingLink: assignment.class.defaultMeetingLink,
+                      })
+                    : null
+                  const initialJoin = nextSession?.teacherJoins[0]
+                    ? {
+                        joinTime:
+                          nextSession.teacherJoins[0].joinTime.toISOString(),
+                        status: nextSession.teacherJoins[0].status,
+                        lateMinutes: nextSession.teacherJoins[0].lateMinutes,
+                      }
+                    : null
 
                   return (
-                    <Link
+                    <div
                       key={assignment.class.id}
-                      href={`/teacher/classes/${assignment.class.id}/sessions`}
-                      className="block rounded-lg border p-4 transition-colors hover:bg-muted/40"
+                      className="rounded-lg border p-4 transition-colors hover:bg-muted/40"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-medium">
-                              {assignment.class.course.code}: {assignment.class.name}
+                          <Link
+                            href={`/teacher/classes/${assignment.class.id}/sessions`}
+                            className="block"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-medium">
+                                {assignment.class.course.code}: {assignment.class.name}
+                              </p>
+                              <Badge variant={assignment.role === "primary" ? "default" : "outline"}>
+                                {assignment.role}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {assignment.class.enrollments.length} active student
+                              {assignment.class.enrollments.length === 1 ? "" : "s"}
+                              {assignment.class.section ? ` - Section ${assignment.class.section}` : ""}
+                              {assignment.class.academicYear ? ` - ${assignment.class.academicYear}` : ""}
                             </p>
-                            <Badge variant={assignment.role === "primary" ? "default" : "outline"}>
-                              {assignment.role}
-                            </Badge>
-                          </div>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {assignment.class.enrollments.length} active student
-                            {assignment.class.enrollments.length === 1 ? "" : "s"}
-                            {assignment.class.section ? ` - Section ${assignment.class.section}` : ""}
-                            {assignment.class.academicYear ? ` - ${assignment.class.academicYear}` : ""}
-                          </p>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {nextSession
-                              ? `Next session: ${formatSessionDate(new Date(nextSession.startTime))} at ${formatSessionTime(new Date(nextSession.startTime))}`
-                              : "No upcoming sessions scheduled"}
-                          </p>
-                          <div className="mt-3">
-                            <ClassScheduleSummary
-                              scheduleDays={assignment.class.scheduleDays}
-                              scheduleStartTime={assignment.class.scheduleStartTime}
-                              scheduleEndTime={assignment.class.scheduleEndTime}
-                              scheduleRecurrence={assignment.class.scheduleRecurrence}
-                              emptyMessage="No recurring schedule has been configured yet."
-                            />
-                          </div>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              {nextSession
+                                ? `Next session: ${formatSessionDate(new Date(nextSession.startTime))} at ${formatSessionTime(new Date(nextSession.startTime))}`
+                                : "No upcoming sessions scheduled"}
+                            </p>
+                            {nextSession ? (
+                              joinWindow?.isVisible ? (
+                                <p className="mt-2 text-xs font-medium text-emerald-600">
+                                  {joinWindow.isLive
+                                    ? "Class is live now."
+                                    : `Starts in ${joinWindow.startsInMinutes} minute${joinWindow.startsInMinutes === 1 ? "" : "s"}.`}
+                                </p>
+                              ) : (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                  Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes before class time.
+                                </p>
+                              )
+                            ) : null}
+                            <div className="mt-3">
+                              <ClassScheduleSummary
+                                scheduleDays={assignment.class.scheduleDays}
+                                scheduleStartTime={assignment.class.scheduleStartTime}
+                                scheduleEndTime={assignment.class.scheduleEndTime}
+                                scheduleRecurrence={assignment.class.scheduleRecurrence}
+                                emptyMessage="No recurring schedule has been configured yet."
+                              />
+                            </div>
+                          </Link>
                         </div>
-                        <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+                          {nextSession && joinWindow?.isVisible && effectiveMeetingSettings ? (
+                            <TeacherJoinButton
+                              sessionId={nextSession.id}
+                              sessionStatus={nextSession.status}
+                              meetingPlatform={effectiveMeetingSettings.platform}
+                              meetingLink={effectiveMeetingSettings.link}
+                              initialJoin={initialJoin}
+                              align="start"
+                              showMeta={false}
+                              className="w-full sm:w-auto"
+                            />
+                          ) : (
+                            <Link href={`/teacher/classes/${assignment.class.id}/sessions`}>
+                              <Button variant="outline" className="w-full sm:w-auto">
+                                View Class
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
                       </div>
-                    </Link>
+                    </div>
                   )
                 })}
               </div>

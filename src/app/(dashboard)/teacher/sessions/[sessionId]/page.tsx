@@ -33,6 +33,7 @@ import {
   getSessionStatusBadge,
 } from "@/lib/attendance-utils"
 import { TeacherJoinSessionCard } from "@/components/teacher/sessions/teacher-join-session-card"
+import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
 
 interface SessionDetailPageProps {
   params: {
@@ -299,12 +300,26 @@ export default async function SessionDetailPage({
             </p>
           </div>
         </div>
-        <Link href={`/teacher/sessions/${params.sessionId}/edit`}>
-          <Button variant="outline" className="w-full sm:w-auto">
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit Session
-          </Button>
-        </Link>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          {canTrackTeacherJoin ? (
+            <TeacherJoinButton
+              sessionId={classSession.id}
+              sessionStatus={classSession.status}
+              meetingPlatform={effectiveMeetingSettings.platform}
+              meetingLink={effectiveMeetingSettings.link}
+              initialJoin={teacherJoin}
+              showMeta={false}
+              align="start"
+              className="w-full sm:w-auto"
+            />
+          ) : null}
+          <Link href={`/teacher/sessions/${params.sessionId}/edit`}>
+            <Button variant="outline" className="w-full sm:w-auto">
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit Session
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
