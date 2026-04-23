@@ -3,7 +3,16 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { MoreHorizontal, Pencil, Trash2, Eye, Users } from "lucide-react"
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Eye,
+  Users,
+  Mail,
+  Phone,
+  Calendar,
+} from "lucide-react"
 
 import {
   Table,
@@ -78,6 +87,40 @@ export function ParentsTable({
 
   const totalPages = Math.ceil(total / limit)
 
+  const renderActions = (parentId: string) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <MoreHorizontal className="h-4 w-4" />
+          <span className="sr-only">Actions</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={`/admin/parents/${parentId}`}>
+            <Eye className="mr-2 h-4 w-4" />
+            View
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/admin/parents/${parentId}/edit`}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-destructive"
+          onClick={() => setDeleteId(parentId)}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   const handleDelete = async () => {
     if (!deleteId) return
 
@@ -104,112 +147,164 @@ export function ParentsTable({
 
   return (
     <>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Children</TableHead>
-              <TableHead>Contact Method</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead className="w-[80px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {parents.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
-                  No parents found
-                </TableCell>
-              </TableRow>
-            ) : (
-              parents.map((parent) => (
-                <TableRow key={parent.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <UserAvatar
-                        firstName={parent.user.firstName}
-                        lastName={parent.user.lastName}
-                        avatarUrl={parent.user.avatarUrl}
-                        className="h-8 w-8"
-                        fallbackClassName="text-xs"
-                      />
-                      <span>
-                        {parent.user.firstName} {parent.user.lastName}
-                      </span>
-                      {parent.isPrimaryContact && (
-                        <Badge variant="outline" className="text-xs">
-                          Primary
+      {parents.length === 0 ? (
+        <div className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+          No parents found
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3 md:hidden">
+            {parents.map((parent) => (
+              <div
+                key={parent.id}
+                className="rounded-xl border bg-card p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <UserAvatar
+                      firstName={parent.user.firstName}
+                      lastName={parent.user.lastName}
+                      avatarUrl={parent.user.avatarUrl}
+                      className="h-11 w-11"
+                      fallbackClassName="text-sm"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="break-words text-sm font-semibold text-foreground">
+                          {parent.user.firstName} {parent.user.lastName}
+                        </p>
+                        {parent.isPrimaryContact ? (
+                          <Badge variant="outline" className="text-[10px]">
+                            Primary
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 break-all text-xs text-muted-foreground">
+                        {parent.user.email}
+                      </p>
+                    </div>
+                  </div>
+                  {renderActions(parent.id)}
+                </div>
+
+                <div className="mt-4 grid gap-3 rounded-lg bg-muted/30 p-3 text-sm sm:grid-cols-2">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="h-4 w-4 shrink-0" />
+                    <span>{parent.user.phone || "No phone added"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Users className="h-4 w-4 shrink-0" />
+                    <span>
+                      {parent._count.studentLinks} child
+                      {parent._count.studentLinks === 1 ? "" : "ren"} linked
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground capitalize">
+                    <Mail className="h-4 w-4 shrink-0" />
+                    <span>{parent.preferredContactMethod}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Calendar className="h-4 w-4 shrink-0" />
+                    <span>{new Date(parent.user.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </p>
+                    <div className="mt-1">
+                      <Badge variant={parent.user.isActive ? "success" : "secondary"}>
+                        {parent.user.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden rounded-md border md:block">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[240px]">Parent</TableHead>
+                    <TableHead className="min-w-[240px]">Email</TableHead>
+                    <TableHead className="min-w-[150px]">Phone</TableHead>
+                    <TableHead className="min-w-[110px]">Children</TableHead>
+                    <TableHead className="min-w-[150px]">Contact Method</TableHead>
+                    <TableHead className="min-w-[120px]">Status</TableHead>
+                    <TableHead className="min-w-[120px]">Joined</TableHead>
+                    <TableHead className="w-[80px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parents.map((parent) => (
+                    <TableRow key={parent.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <UserAvatar
+                            firstName={parent.user.firstName}
+                            lastName={parent.user.lastName}
+                            avatarUrl={parent.user.avatarUrl}
+                            className="h-9 w-9"
+                            fallbackClassName="text-xs"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium">
+                                {parent.user.firstName} {parent.user.lastName}
+                              </p>
+                              {parent.isPrimaryContact ? (
+                                <Badge variant="outline" className="text-[10px]">
+                                  Primary
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Parent profile
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[260px]">
+                        <span className="break-all text-sm text-muted-foreground">
+                          {parent.user.email}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {parent.user.phone || "No phone added"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Users className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm">
+                            {parent._count.studentLinks}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="capitalize">
+                        {parent.preferredContactMethod}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={parent.user.isActive ? "success" : "secondary"}>
+                          {parent.user.isActive ? "Active" : "Inactive"}
                         </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{parent.user.email}</TableCell>
-                  <TableCell>{parent.user.phone || "-"}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Users className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-sm">
-                        {parent._count.studentLinks}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="capitalize">
-                    {parent.preferredContactMethod}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={parent.user.isActive ? "success" : "secondary"}>
-                      {parent.user.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(parent.user.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                          <Link href={`/admin/parents/${parent.id}`}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/admin/parents/${parent.id}/edit`}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => setDeleteId(parent.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(parent.user.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>{renderActions(parent.id)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </>
+      )}
 
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {(page - 1) * limit + 1} to{" "}
             {Math.min(page * limit, total)} of {total} parents

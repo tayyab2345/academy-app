@@ -3,7 +3,16 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { MoreHorizontal, Pencil, Trash2, Eye } from "lucide-react"
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Eye,
+  Calendar,
+  Mail,
+  Phone,
+  BadgeCheck,
+} from "lucide-react"
 
 import {
   Table,
@@ -73,6 +82,40 @@ export function TeachersTable({
 
   const totalPages = Math.ceil(total / limit)
 
+  const renderActions = (teacherId: string) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <MoreHorizontal className="h-4 w-4" />
+          <span className="sr-only">Actions</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={`/admin/teachers/${teacherId}`}>
+            <Eye className="mr-2 h-4 w-4" />
+            View
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/admin/teachers/${teacherId}/edit`}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-destructive"
+          onClick={() => setDeleteId(teacherId)}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   const handleDelete = async () => {
     if (!deleteId) return
 
@@ -99,96 +142,142 @@ export function TeachersTable({
 
   return (
     <>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Employee ID</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead className="w-[80px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {teachers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
-                  No teachers found
-                </TableCell>
-              </TableRow>
-            ) : (
-              teachers.map((teacher) => (
-                <TableRow key={teacher.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
-                      <UserAvatar
-                        firstName={teacher.user.firstName}
-                        lastName={teacher.user.lastName}
-                        avatarUrl={teacher.user.avatarUrl}
-                        className="h-8 w-8"
-                        fallbackClassName="text-xs"
-                      />
-                      <span>
+      {teachers.length === 0 ? (
+        <div className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+          No teachers found
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3 md:hidden">
+            {teachers.map((teacher) => (
+              <div
+                key={teacher.id}
+                className="rounded-xl border bg-card p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <UserAvatar
+                      firstName={teacher.user.firstName}
+                      lastName={teacher.user.lastName}
+                      avatarUrl={teacher.user.avatarUrl}
+                      className="h-11 w-11"
+                      fallbackClassName="text-sm"
+                    />
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold text-foreground">
                         {teacher.user.firstName} {teacher.user.lastName}
-                      </span>
+                      </p>
+                      <p className="mt-1 break-all text-xs text-muted-foreground">
+                        {teacher.user.email}
+                      </p>
                     </div>
-                  </TableCell>
-                  <TableCell>{teacher.employeeId || "-"}</TableCell>
-                  <TableCell>{teacher.user.email}</TableCell>
-                  <TableCell>{teacher.user.phone || "-"}</TableCell>
-                  <TableCell>
-                    <Badge variant={teacher.user.isActive ? "success" : "secondary"}>
-                      {teacher.user.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(teacher.user.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                          <Link href={`/admin/teachers/${teacher.id}`}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/admin/teachers/${teacher.id}/edit`}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => setDeleteId(teacher.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                  </div>
+                  {renderActions(teacher.id)}
+                </div>
+
+                <div className="mt-4 grid gap-3 rounded-lg bg-muted/30 p-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Employee ID
+                    </p>
+                    <p className="mt-1 font-medium">{teacher.employeeId || "Not assigned"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </p>
+                    <div className="mt-1">
+                      <Badge variant={teacher.user.isActive ? "success" : "secondary"}>
+                        {teacher.user.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="h-4 w-4 shrink-0" />
+                    <span>{teacher.user.phone || "No phone added"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Calendar className="h-4 w-4 shrink-0" />
+                    <span>{new Date(teacher.user.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden rounded-md border md:block">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[240px]">Teacher</TableHead>
+                    <TableHead className="min-w-[130px]">Employee ID</TableHead>
+                    <TableHead className="min-w-[240px]">Email</TableHead>
+                    <TableHead className="min-w-[150px]">Phone</TableHead>
+                    <TableHead className="min-w-[120px]">Status</TableHead>
+                    <TableHead className="min-w-[120px]">Joined</TableHead>
+                    <TableHead className="w-[80px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {teachers.map((teacher) => (
+                    <TableRow key={teacher.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <UserAvatar
+                            firstName={teacher.user.firstName}
+                            lastName={teacher.user.lastName}
+                            avatarUrl={teacher.user.avatarUrl}
+                            className="h-9 w-9"
+                            fallbackClassName="text-xs"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-medium">
+                              {teacher.user.firstName} {teacher.user.lastName}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Teacher profile
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                          <BadgeCheck className="h-3.5 w-3.5" />
+                          {teacher.employeeId || "Not assigned"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[260px]">
+                        <div className="flex items-start gap-2">
+                          <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="break-all text-sm text-muted-foreground">
+                            {teacher.user.email}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {teacher.user.phone || "No phone added"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={teacher.user.isActive ? "success" : "secondary"}>
+                          {teacher.user.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(teacher.user.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>{renderActions(teacher.id)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </>
+      )}
 
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {(page - 1) * limit + 1} to{" "}
             {Math.min(page * limit, total)} of {total} teachers
