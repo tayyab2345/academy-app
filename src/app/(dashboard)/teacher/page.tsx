@@ -18,10 +18,14 @@ import { prisma } from "@/lib/prisma"
 import {
   formatSessionDate,
   formatSessionTime,
+  getEffectiveSessionMeetingSettings,
+  getSessionJoinWindowState,
   getSessionStatusBadge,
+  SESSION_JOIN_LEAD_MINUTES,
 } from "@/lib/attendance-utils"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
 import { ReportStatusBadge } from "@/components/reports/report-status-badge"
+import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
 import { Badge, type BadgeProps } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -180,10 +184,14 @@ async function getTeacherDashboardData(userId: string) {
             startTime: true,
             endTime: true,
             status: true,
+            meetingPlatform: true,
+            meetingLink: true,
             class: {
               select: {
                 id: true,
                 name: true,
+                defaultMeetingPlatform: true,
+                defaultMeetingLink: true,
                 course: {
                   select: {
                     code: true,
@@ -191,6 +199,17 @@ async function getTeacherDashboardData(userId: string) {
                   },
                 },
               },
+            },
+            teacherJoins: {
+              where: {
+                teacherProfileId: teacherProfile.id,
+              },
+              select: {
+                joinTime: true,
+                status: true,
+                lateMinutes: true,
+              },
+              take: 1,
             },
           },
           orderBy: {
@@ -283,6 +302,13 @@ export default async function TeacherDashboardPage() {
   }
   const hasAssignedClasses = stats.myClasses > 0
   const academyPrimaryColor = session.user.academy?.primaryColor || "#059669"
+  const visibleJoinButtons = upcomingSessions.filter((upcomingSession) =>
+    getSessionJoinWindowState({
+      startTime: upcomingSession.startTime,
+      endTime: upcomingSession.endTime,
+      status: upcomingSession.status,
+    }).isVisible
+  ).length
 
   return (
     <div className="space-y-6">
@@ -388,8 +414,8 @@ export default async function TeacherDashboardPage() {
                       href={`/teacher/classes/${assignment.class.id}/sessions`}
                       className="block rounded-lg border p-4 transition-colors hover:bg-muted/40"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-medium">
                               {assignment.class.course.code}: {assignment.class.name}
@@ -455,15 +481,39 @@ export default async function TeacherDashboardPage() {
               <div className="space-y-3">
                 {upcomingSessions.map((upcomingSession) => {
                   const sessionBadge = getSessionStatusBadge(upcomingSession.status)
+                  const joinWindow = getSessionJoinWindowState({
+                    startTime: upcomingSession.startTime,
+                    endTime: upcomingSession.endTime,
+                    status: upcomingSession.status,
+                  })
+                  const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+                    sessionMeetingPlatform: upcomingSession.meetingPlatform,
+                    sessionMeetingLink: upcomingSession.meetingLink,
+                    classMeetingPlatform:
+                      upcomingSession.class.defaultMeetingPlatform,
+                    classMeetingLink: upcomingSession.class.defaultMeetingLink,
+                  })
+                  const initialJoin = upcomingSession.teacherJoins[0]
+                    ? {
+                        joinTime:
+                          upcomingSession.teacherJoins[0].joinTime.toISOString(),
+                        status: upcomingSession.teacherJoins[0].status,
+                        lateMinutes:
+                          upcomingSession.teacherJoins[0].lateMinutes,
+                      }
+                    : null
 
                   return (
-                    <Link
+                    <div
                       key={upcomingSession.id}
-                      href={`/teacher/sessions/${upcomingSession.id}`}
-                      className="block rounded-lg border p-4 transition-colors hover:bg-muted/40"
+                      className="rounded-lg border p-4 transition-colors hover:bg-muted/40"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <Link
+                            href={`/teacher/sessions/${upcomingSession.id}`}
+                            className="block"
+                          >
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-medium">
                               {upcomingSession.title || `${upcomingSession.class.course.code} session`}
@@ -480,12 +530,49 @@ export default async function TeacherDashboardPage() {
                             {formatSessionTime(new Date(upcomingSession.startTime))} -{" "}
                             {formatSessionTime(new Date(upcomingSession.endTime))}
                           </p>
+                          {joinWindow.isVisible ? (
+                            <p className="mt-2 text-xs font-medium text-emerald-600">
+                              {joinWindow.isLive
+                                ? "Class is live now."
+                                : `Starts in ${joinWindow.startsInMinutes} minute${joinWindow.startsInMinutes === 1 ? "" : "s"}.`}
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes before start.
+                            </p>
+                          )}
+                          </Link>
                         </div>
-                        <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+                          {joinWindow.isVisible ? (
+                            <TeacherJoinButton
+                              sessionId={upcomingSession.id}
+                              sessionStatus={upcomingSession.status}
+                              meetingPlatform={effectiveMeetingSettings.platform}
+                              meetingLink={effectiveMeetingSettings.link}
+                              initialJoin={initialJoin}
+                              align="start"
+                              showMeta={false}
+                              className="w-full sm:w-auto"
+                            />
+                          ) : (
+                            <Link href={`/teacher/sessions/${upcomingSession.id}`}>
+                              <Button variant="outline" className="w-full sm:w-auto">
+                                View Session
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
                       </div>
-                    </Link>
+                    </div>
                   )
                 })}
+                {visibleJoinButtons === 0 ? (
+                  <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                    No classes are in their join window right now. Join buttons appear {SESSION_JOIN_LEAD_MINUTES} minutes before the class starts.
+                  </p>
+                ) : null}
               </div>
             )}
           </CardContent>

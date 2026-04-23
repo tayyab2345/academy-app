@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AttendanceGrid } from "@/components/teacher/attendance/attendance-grid"
+import { MeetingLinkButton } from "@/components/sessions/meeting-link-button"
 import {
   formatLateThresholdLabel,
   getEffectiveSessionMeetingSettings,
@@ -277,29 +278,29 @@ export default async function SessionDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-4">
           <Link href={`/teacher/classes/${classSession.classId}/sessions`}>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold tracking-tight">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h2 className="break-words text-2xl font-bold tracking-tight">
                 {classSession.title || "Session Attendance"}
               </h2>
               <Badge variant={statusBadge.variant as any}>
                 {statusBadge.label}
               </Badge>
             </div>
-            <p className="text-muted-foreground">
+            <p className="break-words text-muted-foreground">
               {classSession.class.course.code} - {classSession.class.name}
             </p>
           </div>
         </div>
         <Link href={`/teacher/sessions/${params.sessionId}/edit`}>
-          <Button variant="outline">
+          <Button variant="outline" className="w-full sm:w-auto">
             <Pencil className="mr-2 h-4 w-4" />
             Edit Session
           </Button>
@@ -335,15 +336,8 @@ export default async function SessionDetailPage({
                 <span>{getMeetingPlatformLabel(effectiveMeetingSettings.platform)}</span>
               </div>
               {effectiveMeetingSettings.link && (
-                <div className="flex items-center gap-2">
-                  <a
-                    href={effectiveMeetingSettings.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="truncate text-sm text-blue-600 hover:underline"
-                  >
-                    {effectiveMeetingSettings.link}
-                  </a>
+                <div className="pt-1">
+                  <MeetingLinkButton href={effectiveMeetingSettings.link} />
                 </div>
               )}
               {effectiveMeetingSettings.inheritedFromClass ? (

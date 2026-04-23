@@ -21,6 +21,7 @@ import {
 import { AssignTeacherDialog } from "@/components/admin/classes/assign-teacher-dialog"
 import { EnrollStudentsDialog } from "@/components/admin/classes/enroll-students-dialog"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
+import { MeetingLinkButton } from "@/components/sessions/meeting-link-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -272,16 +273,16 @@ export default async function ClassDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-4">
           <Link href="/admin/classes">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold tracking-tight">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h2 className="break-words text-2xl font-bold tracking-tight">
                 {classData.name}
               </h2>
               {classData.section ? (
@@ -289,13 +290,13 @@ export default async function ClassDetailPage({
               ) : null}
               {getStatusBadge(classData.status)}
             </div>
-            <p className="text-muted-foreground">
+            <p className="break-words text-muted-foreground">
               {classData.course.code} - {classData.course.name}
             </p>
           </div>
         </div>
         <Link href={`/admin/classes/${params.classId}/edit`}>
-          <Button variant="outline">
+          <Button variant="outline" className="w-full sm:w-auto">
             <Pencil className="mr-2 h-4 w-4" />
             Edit Class
           </Button>
@@ -313,8 +314,8 @@ export default async function ClassDetailPage({
                 <p className="text-sm font-medium text-muted-foreground">
                   Course
                 </p>
-                <p className="font-medium">{classData.course.name}</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="break-words font-medium">{classData.course.name}</p>
+                <p className="break-words text-sm text-muted-foreground">
                   {classData.course.subjectArea} - {classData.course.gradeLevel}
                 </p>
               </div>
@@ -326,7 +327,7 @@ export default async function ClassDetailPage({
                 <p>{classData.academicYear}</p>
               </div>
               <Separator />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">
                     Start Date
@@ -370,10 +371,7 @@ export default async function ClassDetailPage({
                   </p>
                   <div className="space-y-2">
                     {classData.sessions.map((sessionItem) => (
-                      <div
-                        key={sessionItem.id}
-                        className="rounded-md border px-3 py-2"
-                      >
+                      <div key={sessionItem.id} className="rounded-md border px-3 py-3">
                         <p className="text-sm font-medium">
                           {sessionItem.title || "Class Session"}
                         </p>
@@ -405,14 +403,13 @@ export default async function ClassDetailPage({
                           </span>
                         </div>
                         {sessionItem.meetingLink ? (
-                          <a
-                            href={sessionItem.meetingLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 block truncate text-xs text-blue-600 hover:underline"
-                          >
-                            {sessionItem.meetingLink}
-                          </a>
+                          <div className="mt-3">
+                            <MeetingLinkButton
+                              href={sessionItem.meetingLink}
+                              label="Open Meeting Link"
+                              className="sm:h-9"
+                            />
+                          </div>
                         ) : null}
                       </div>
                     ))}
@@ -451,14 +448,12 @@ export default async function ClassDetailPage({
                     Default class meeting link
                   </p>
                   {classData.defaultMeetingLink ? (
-                    <a
-                      href={classData.defaultMeetingLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block truncate text-sm text-blue-600 hover:underline"
-                    >
-                      {classData.defaultMeetingLink}
-                    </a>
+                    <div className="pt-2">
+                      <MeetingLinkButton
+                        href={classData.defaultMeetingLink}
+                        label="Open Meeting Link"
+                      />
+                    </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       No default class meeting link has been added yet.
@@ -502,8 +497,8 @@ export default async function ClassDetailPage({
 
         <div className="space-y-6 lg:col-span-2">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <CardTitle className="flex items-center gap-2">
                   <GraduationCap className="h-5 w-5" />
                   Teachers
@@ -531,18 +526,18 @@ export default async function ClassDetailPage({
                   {classData.teachers.map((assignment) => (
                     <div
                       key={assignment.id}
-                      className="flex items-center justify-between rounded-lg border p-3"
+                      className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <UserAvatar
                           firstName={assignment.teacherProfile.user.firstName}
                           lastName={assignment.teacherProfile.user.lastName}
                           avatarUrl={assignment.teacherProfile.user.avatarUrl}
                           className="h-10 w-10"
                         />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="break-words font-medium">
                               {assignment.teacherProfile.user.firstName}{" "}
                               {assignment.teacherProfile.user.lastName}
                             </p>
@@ -558,7 +553,7 @@ export default async function ClassDetailPage({
                                 : "Assistant"}
                             </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="break-all text-sm text-muted-foreground">
                             {assignment.teacherProfile.user.email}
                           </p>
                         </div>
@@ -581,8 +576,8 @@ export default async function ClassDetailPage({
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
                   Enrolled Students
@@ -611,17 +606,17 @@ export default async function ClassDetailPage({
                   {classData.enrollments.map((enrollment) => (
                     <div
                       key={enrollment.id}
-                      className="flex items-center justify-between rounded-lg border p-3"
+                      className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <UserAvatar
                           firstName={enrollment.studentProfile.user.firstName}
                           lastName={enrollment.studentProfile.user.lastName}
                           avatarUrl={enrollment.studentProfile.user.avatarUrl}
                           className="h-10 w-10"
                         />
-                        <div>
-                          <p className="font-medium">
+                        <div className="min-w-0">
+                          <p className="break-words font-medium">
                             {enrollment.studentProfile.user.firstName}{" "}
                             {enrollment.studentProfile.user.lastName}
                           </p>

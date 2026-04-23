@@ -21,7 +21,15 @@ export interface EffectiveSessionMeetingSettings {
   inheritedFromClass: boolean
 }
 
+export interface SessionJoinWindowState {
+  isVisible: boolean
+  isLive: boolean
+  isStartingSoon: boolean
+  startsInMinutes: number | null
+}
+
 export const LATE_THRESHOLD_MINUTES = 5
+export const SESSION_JOIN_LEAD_MINUTES = 15
 
 export function calculateAttendanceStatus(
   scheduledStartTime: Date,
@@ -151,6 +159,41 @@ export function formatSessionDate(date: Date): string {
     day: "numeric",
     year: "numeric",
   })
+}
+
+export function getSessionJoinWindowState(
+  session: {
+    startTime: Date | string
+    endTime: Date | string
+    status: string
+  },
+  leadMinutes: number = SESSION_JOIN_LEAD_MINUTES
+): SessionJoinWindowState {
+  if (session.status === "cancelled" || session.status === "completed") {
+    return {
+      isVisible: false,
+      isLive: false,
+      isStartingSoon: false,
+      startsInMinutes: null,
+    }
+  }
+
+  const now = new Date()
+  const startTime = new Date(session.startTime)
+  const endTime = new Date(session.endTime)
+  const leadMs = leadMinutes * 60 * 1000
+  const startsInMs = startTime.getTime() - now.getTime()
+  const startsInMinutes = Math.max(0, Math.ceil(startsInMs / (1000 * 60)))
+  const isLive = now >= startTime && now <= endTime
+  const isStartingSoon =
+    startsInMs > 0 && startsInMs <= leadMs && now < startTime
+
+  return {
+    isVisible: isLive || isStartingSoon,
+    isLive,
+    isStartingSoon,
+    startsInMinutes: isLive || isStartingSoon ? startsInMinutes : null,
+  }
 }
 
 export function isSessionActive(session: {

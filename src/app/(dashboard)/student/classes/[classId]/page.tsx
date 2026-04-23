@@ -16,6 +16,7 @@ import {
 import { JoinSessionButton } from "@/components/student/join-session-button"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
 import { CourseSyllabusPanel } from "@/components/courses/course-syllabus-panel"
+import { MeetingLinkButton } from "@/components/sessions/meeting-link-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -166,15 +167,17 @@ export default async function StudentClassDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-start gap-4">
         <Link href="/student/classes">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">{classData.name}</h2>
-          <p className="text-muted-foreground">
+        <div className="min-w-0">
+          <h2 className="break-words text-2xl font-bold tracking-tight">
+            {classData.name}
+          </h2>
+          <p className="break-words text-muted-foreground">
             {classData.course.code} - {classData.course.name}
           </p>
         </div>
@@ -189,8 +192,8 @@ export default async function StudentClassDetailPage({
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Course</p>
-                <p>{classData.course.name}</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="break-words">{classData.course.name}</p>
+                <p className="break-words text-sm text-muted-foreground">
                   {classData.course.subjectArea}
                 </p>
               </div>
@@ -237,14 +240,9 @@ export default async function StudentClassDetailPage({
                     {getMeetingPlatformLabel(classData.defaultMeetingPlatform)}
                   </p>
                   {classData.defaultMeetingLink ? (
-                    <a
-                      href={classData.defaultMeetingLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block truncate text-sm text-blue-600 hover:underline"
-                    >
-                      {classData.defaultMeetingLink}
-                    </a>
+                    <div className="pt-2">
+                      <MeetingLinkButton href={classData.defaultMeetingLink} />
+                    </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       Admin has not added the class meeting link yet.
@@ -277,7 +275,10 @@ export default async function StudentClassDetailPage({
               ) : (
                 <div className="space-y-3">
                   {classData.teachers.map((assignment) => (
-                    <div key={assignment.id} className="flex items-center gap-3">
+                    <div
+                      key={assignment.id}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                    >
                       <div>
                         <p className="font-medium">
                           {assignment.teacherProfile.user.firstName}{" "}
@@ -331,13 +332,13 @@ export default async function StudentClassDetailPage({
                     return (
                       <div
                         key={sessionItem.id}
-                        className="flex items-center justify-between gap-4 rounded-lg border p-4"
+                        className="flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-start sm:justify-between"
                       >
-                        <div className="space-y-1">
+                        <div className="min-w-0 space-y-1">
                           <p className="font-medium">
                             {sessionItem.title || "Class Session"}
                           </p>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
                               {new Date(sessionItem.startTime).toLocaleDateString()}
@@ -370,16 +371,11 @@ export default async function StudentClassDetailPage({
                               )}
                             </span>
                           </div>
-                          {effectiveMeetingSettings.platform !== "in_person" ? (
-                            effectiveMeetingSettings.link ? (
-                              <p className="truncate text-xs text-blue-600">
-                                {effectiveMeetingSettings.link}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                Meeting link has not been added yet.
-                              </p>
-                            )
+                          {effectiveMeetingSettings.platform !== "in_person" &&
+                          !effectiveMeetingSettings.link ? (
+                            <p className="text-xs text-muted-foreground">
+                              Meeting link has not been added yet.
+                            </p>
                           ) : null}
                           {effectiveMeetingSettings.inheritedFromClass ? (
                             <p className="text-xs text-muted-foreground">
@@ -416,6 +412,7 @@ export default async function StudentClassDetailPage({
                                 }
                               : null
                           }
+                          align="start"
                         />
                       </div>
                     )

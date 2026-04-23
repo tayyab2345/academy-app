@@ -9,6 +9,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { getSessionJoinStatusBadge } from "@/lib/attendance-utils"
+import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
@@ -21,6 +22,9 @@ interface JoinSessionButtonProps {
     joinTime: string | null
     lateMinutes: number | null
   } | null
+  className?: string
+  showMeta?: boolean
+  align?: "start" | "end"
 }
 
 export function JoinSessionButton({
@@ -29,6 +33,9 @@ export function JoinSessionButton({
   meetingPlatform,
   meetingLink,
   initialAttendance = null,
+  className,
+  showMeta = true,
+  align = "end",
 }: JoinSessionButtonProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -97,7 +104,15 @@ export function JoinSessionButton({
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div
+      className={cn(
+        "flex flex-col gap-2",
+        align === "start"
+          ? "items-start text-left"
+          : "items-stretch sm:items-end sm:text-right",
+        className
+      )}
+    >
       <Button
         onClick={handleJoin}
         disabled={
@@ -107,6 +122,10 @@ export function JoinSessionButton({
           (meetingPlatform === "in_person" && hasJoined)
         }
         variant={hasJoined ? "secondary" : "default"}
+        className={cn(
+          "w-full sm:w-auto",
+          !hasJoined && "bg-emerald-600 text-white hover:bg-emerald-700"
+        )}
       >
         {isLoading ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -124,14 +143,19 @@ export function JoinSessionButton({
         {hasJoined
           ? meetingPlatform === "in_person"
             ? "Attendance Recorded"
-            : "Reopen Session"
+            : "Open Class"
           : meetingPlatform === "in_person"
             ? "Mark Attendance"
-            : "Join Session"}
+            : "Join Class"}
       </Button>
 
-      {joinRecord?.joinTime ? (
-        <div className="space-y-1 text-right">
+      {showMeta && joinRecord?.joinTime ? (
+        <div
+          className={cn(
+            "space-y-1",
+            align === "start" ? "text-left" : "text-right"
+          )}
+        >
           {joinBadge ? (
             <Badge variant={joinBadge.variant as any}>{joinBadge.label}</Badge>
           ) : null}
@@ -146,11 +170,11 @@ export function JoinSessionButton({
             <p className="text-xs text-green-600">Joined on time</p>
           )}
         </div>
-      ) : !canJoin ? (
+      ) : showMeta && !canJoin ? (
         <p className="text-xs text-muted-foreground">
           Join is available for scheduled or ongoing sessions.
         </p>
-      ) : meetingPlatform !== "in_person" && !meetingLink ? (
+      ) : showMeta && meetingPlatform !== "in_person" && !meetingLink ? (
         <p className="text-xs text-muted-foreground">Meeting link not available yet.</p>
       ) : null}
 

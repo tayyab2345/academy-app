@@ -16,8 +16,15 @@ import {
 import { authOptions } from "@/lib/auth"
 import { calculateOutstandingAmount } from "@/lib/invoice-utils"
 import { prisma } from "@/lib/prisma"
-import { formatSessionDate, formatSessionTime } from "@/lib/attendance-utils"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getEffectiveSessionMeetingSettings,
+  getSessionJoinWindowState,
+  SESSION_JOIN_LEAD_MINUTES,
+} from "@/lib/attendance-utils"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
+import { JoinSessionButton } from "@/components/student/join-session-button"
 import { CurrencyAmount } from "@/components/ui/currency-amount"
 import { ReportStatusBadge } from "@/components/reports/report-status-badge"
 import { InvoiceStatusBadge } from "@/components/finance/invoice-status-badge"
@@ -96,6 +103,25 @@ async function getStudentDashboardCoreData(userId: string) {
                     startTime: "asc",
                   },
                   take: 1,
+                  select: {
+                    id: true,
+                    title: true,
+                    startTime: true,
+                    endTime: true,
+                    status: true,
+                    meetingPlatform: true,
+                    meetingLink: true,
+                    attendances: {
+                      where: {
+                        studentProfileId: studentProfile.id,
+                      },
+                      select: {
+                        joinTime: true,
+                        lateMinutes: true,
+                      },
+                      take: 1,
+                    },
+                  },
                 },
               },
             },
@@ -377,6 +403,19 @@ export default async function StudentDashboardPage() {
   const outstandingInvoices = invoiceSnapshots.filter((invoice) => invoice.outstanding > 0)
   const unreadNotifications = notifications.filter((notification) => !notification.isRead).length
   const academyPrimaryColor = session.user.academy?.primaryColor || "#059669"
+  const visibleDashboardJoins = enrollments.slice(0, 4).filter((enrollment) => {
+    const nextSession = enrollment.class.sessions[0]
+
+    if (!nextSession) {
+      return false
+    }
+
+    return getSessionJoinWindowState({
+      startTime: nextSession.startTime,
+      endTime: nextSession.endTime,
+      status: nextSession.status,
+    }).isVisible
+  }).length
 
   return (
     <div className="space-y-6">
@@ -498,15 +537,35 @@ export default async function StudentDashboardPage() {
                 {enrollments.slice(0, 4).map((enrollment) => {
                   const primaryTeacher = enrollment.class.teachers[0]?.teacherProfile
                   const nextSession = enrollment.class.sessions[0]
+                  const joinWindow = nextSession
+                    ? getSessionJoinWindowState({
+                        startTime: nextSession.startTime,
+                        endTime: nextSession.endTime,
+                        status: nextSession.status,
+                      })
+                    : null
+                  const effectiveMeetingSettings = nextSession
+                    ? getEffectiveSessionMeetingSettings({
+                        sessionMeetingPlatform: nextSession.meetingPlatform,
+                        sessionMeetingLink: nextSession.meetingLink,
+                        classMeetingPlatform:
+                          enrollment.class.defaultMeetingPlatform,
+                        classMeetingLink: enrollment.class.defaultMeetingLink,
+                      })
+                    : null
+                  const studentAttendance = nextSession?.attendances[0] || null
 
                   return (
-                    <Link
+                    <div
                       key={enrollment.class.id}
-                      href={`/student/classes/${enrollment.class.id}`}
-                      className="block rounded-lg border p-4 transition-colors hover:bg-muted/40"
+                      className="rounded-lg border p-4 transition-colors hover:bg-muted/40"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <Link
+                            href={`/student/classes/${enrollment.class.id}`}
+                            className="block"
+                          >
                           <p className="truncate text-sm font-medium">
                             {enrollment.class.course.code}: {enrollment.class.name}
                           </p>
@@ -524,6 +583,19 @@ export default async function StudentDashboardPage() {
                               ? `Next session: ${formatSessionDate(new Date(nextSession.startTime))} at ${formatSessionTime(new Date(nextSession.startTime))}`
                               : "No upcoming sessions scheduled"}
                           </p>
+                          {nextSession ? (
+                            joinWindow?.isVisible ? (
+                              <p className="mt-2 text-xs font-medium text-emerald-600">
+                                {joinWindow.isLive
+                                  ? "Class is live now."
+                                  : `Starts in ${joinWindow.startsInMinutes} minute${joinWindow.startsInMinutes === 1 ? "" : "s"}.`}
+                              </p>
+                            ) : (
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes before class time.
+                              </p>
+                            )
+                          ) : null}
                           <div className="mt-3">
                             <ClassScheduleSummary
                               scheduleDays={enrollment.class.scheduleDays}
@@ -533,12 +605,46 @@ export default async function StudentDashboardPage() {
                               emptyMessage="No recurring schedule has been configured yet."
                             />
                           </div>
+                          </Link>
                         </div>
-                        <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+                          {nextSession && joinWindow?.isVisible && effectiveMeetingSettings ? (
+                            <JoinSessionButton
+                              sessionId={nextSession.id}
+                              sessionStatus={nextSession.status}
+                              meetingPlatform={effectiveMeetingSettings.platform}
+                              meetingLink={effectiveMeetingSettings.link}
+                              initialAttendance={
+                                studentAttendance
+                                  ? {
+                                      joinTime: studentAttendance.joinTime
+                                        ? studentAttendance.joinTime.toISOString()
+                                        : null,
+                                      lateMinutes: studentAttendance.lateMinutes,
+                                    }
+                                  : null
+                              }
+                              align="start"
+                              showMeta={false}
+                            />
+                          ) : (
+                            <Link href={`/student/classes/${enrollment.class.id}`}>
+                              <Button variant="outline" className="w-full sm:w-auto">
+                                View Class
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
                       </div>
-                    </Link>
+                    </div>
                   )
                 })}
+                {visibleDashboardJoins === 0 ? (
+                  <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                    No class is ready to join right now. Join buttons appear {SESSION_JOIN_LEAD_MINUTES} minutes before class time.
+                  </p>
+                ) : null}
               </div>
             )}
           </CardContent>
