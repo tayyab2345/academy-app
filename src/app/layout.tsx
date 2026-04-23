@@ -1,8 +1,15 @@
 import type { Metadata, Viewport } from "next"
+import dynamic from "next/dynamic"
 import { getAppBaseUrl } from "@/lib/app-url"
-import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt"
 import { Providers } from "./providers"
 import "./globals.css"
+
+const PWAInstallPrompt = dynamic(
+  () => import("@/components/pwa/pwa-install-prompt").then((mod) => mod.PWAInstallPrompt),
+  {
+    ssr: false,
+  }
+)
 
 export const metadata: Metadata = {
   metadataBase: new URL(getAppBaseUrl()),

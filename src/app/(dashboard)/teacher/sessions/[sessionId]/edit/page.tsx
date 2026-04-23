@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { getEffectiveSessionMeetingSettings } from "@/lib/attendance-utils"
+import { formatClassScheduleTime } from "@/lib/class-schedule"
 import { prisma } from "@/lib/prisma"
 import { ArrowLeft } from "lucide-react"
 
@@ -106,14 +108,25 @@ export default async function EditSessionPage({
     notFound()
   }
 
+  const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+    sessionMeetingPlatform: classSession.meetingPlatform,
+    sessionMeetingLink: classSession.meetingLink,
+    classMeetingPlatform: classSession.class.defaultMeetingPlatform,
+    classMeetingLink: classSession.class.defaultMeetingLink,
+  })
+
   const initialData = {
     id: classSession.id,
     title: classSession.title || "",
     sessionDate: classSession.sessionDate.toISOString(),
     startTime: classSession.startTime.toISOString(),
     endTime: classSession.endTime.toISOString(),
-    meetingLink: classSession.meetingLink || "",
-    meetingPlatform: classSession.meetingPlatform,
+    meetingLink: effectiveMeetingSettings.link || "",
+    meetingPlatform: effectiveMeetingSettings.platform as
+      | "zoom"
+      | "google_meet"
+      | "teams"
+      | "in_person",
   }
 
   return (
@@ -136,6 +149,17 @@ export default async function EditSessionPage({
       <SessionForm
         classId={classSession.classId}
         initialData={initialData}
+        classDefaults={{
+          scheduleStartTime: formatClassScheduleTime(
+            classSession.class.scheduleStartTime
+          ),
+          scheduleEndTime: formatClassScheduleTime(
+            classSession.class.scheduleEndTime
+          ),
+          defaultMeetingPlatform: classSession.class.defaultMeetingPlatform,
+          defaultMeetingLink: classSession.class.defaultMeetingLink,
+          lateThresholdMinutes: classSession.class.lateThresholdMinutes,
+        }}
         isEditing
       />
     </div>

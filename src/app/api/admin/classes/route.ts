@@ -6,6 +6,7 @@ import {
   parsePositiveInt,
 } from "@/lib/admin/admin-data"
 import { getAdminClassesPageData } from "@/lib/admin/admin-lists-data"
+import { syncClassEnrollmentAssignments } from "@/lib/class-enrollment"
 import { syncPrimaryTeacherAssignment } from "@/lib/class-teacher-assignment"
 import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { prisma } from "@/lib/prisma"
@@ -34,6 +35,12 @@ const createClassSchema = z
     scheduleDays: z.array(z.enum(CLASS_WEEKDAY_VALUES)).default([]),
     scheduleStartTime: z.string().optional(),
     scheduleEndTime: z.string().optional(),
+    defaultMeetingPlatform: z
+      .enum(["zoom", "google_meet", "teams", "in_person"])
+      .default("in_person"),
+    defaultMeetingLink: z.string().url().optional().or(z.literal("")),
+    lateThresholdMinutes: z.coerce.number().int().min(0).max(120).default(5),
+    studentProfileIds: z.array(z.string()).default([]),
     teacherProfileId: teacherProfileIdSchema,
   })
   .superRefine((data, ctx) => {
@@ -87,6 +94,17 @@ const createClassSchema = z
         code: z.ZodIssueCode.custom,
         message: "End time must be later than the start time",
         path: ["scheduleEndTime"],
+      })
+    }
+
+    if (
+      data.defaultMeetingPlatform !== "in_person" &&
+      !data.defaultMeetingLink
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Meeting link is required for online classes",
+        path: ["defaultMeetingLink"],
       })
     }
   })
@@ -169,6 +187,9 @@ export async function POST(req: NextRequest) {
           scheduleStartTime: validated.data.scheduleStartTime || null,
           scheduleEndTime: validated.data.scheduleEndTime || null,
           scheduleRecurrence: "weekly",
+          defaultMeetingPlatform: validated.data.defaultMeetingPlatform,
+          defaultMeetingLink: validated.data.defaultMeetingLink || null,
+          lateThresholdMinutes: validated.data.lateThresholdMinutes,
         },
       })
 
@@ -180,6 +201,14 @@ export async function POST(req: NextRequest) {
           teacherProfileId: validated.data.teacherProfileId,
         })
       }
+
+      await syncClassEnrollmentAssignments({
+        tx,
+        academyId: session.user.academyId,
+        classId: createdClass.id,
+        gradeLevel: course.gradeLevel,
+        studentProfileIds: validated.data.studentProfileIds,
+      })
 
       return createdClass.id
     })
@@ -213,11 +242,18 @@ export async function POST(req: NextRequest) {
     if (
       error instanceof Error &&
       (error.message === "Teacher not found" ||
-        error.message === "Only active teachers can be assigned to a class")
+        error.message === "Only active teachers can be assigned to a class" ||
+        error.message ===
+          "One or more selected students could not be assigned. Check academy ownership, grade level, and active status.")
     ) {
       return NextResponse.json(
         { error: error.message },
-        { status: error.message === "Teacher not found" ? 404 : 400 }
+        {
+          status:
+            error.message === "Teacher not found"
+              ? 404
+              : 400,
+        }
       )
     }
 

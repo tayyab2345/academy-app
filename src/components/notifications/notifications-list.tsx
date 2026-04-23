@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Bell, CheckCheck, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -24,7 +23,8 @@ interface NotificationsListProps {
   totalPages: number
   limit: number
   onPageChange: (page: number) => void
-  onNotificationRead: () => void
+  onNotificationRead?: (id: string) => void
+  onMarkAllAsRead?: () => void
   isLoading?: boolean
 }
 
@@ -42,9 +42,9 @@ export function NotificationsList({
   limit,
   onPageChange,
   onNotificationRead,
+  onMarkAllAsRead,
   isLoading = false,
 }: NotificationsListProps) {
-  const router = useRouter()
   const [markingAll, setMarkingAll] = useState(false)
 
   const handleMarkAsRead = async (id: string) => {
@@ -58,8 +58,7 @@ export function NotificationsList({
       }
 
       emitNotificationsUpdated()
-      onNotificationRead()
-      router.refresh()
+      onNotificationRead?.(id)
     } catch (error) {
       console.error("Failed to mark as read:", error)
     }
@@ -78,8 +77,7 @@ export function NotificationsList({
       }
 
       emitNotificationsUpdated()
-      onNotificationRead()
-      router.refresh()
+      onMarkAllAsRead?.()
     } catch (error) {
       console.error("Failed to mark all as read:", error)
     } finally {

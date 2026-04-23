@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { buildDateTimeFromDateInputAndTime } from "@/lib/class-schedule"
 
 export type TeacherAttendanceStatus = "present" | "absent" | "late" | "excused"
 
@@ -18,6 +19,8 @@ export type TeacherAttendanceClassInfo = {
   name: string
   section: string | null
   status: string
+  scheduleStartTime?: string | null
+  scheduleEndTime?: string | null
   course: {
     code: string
     name: string
@@ -156,6 +159,8 @@ async function getTeacherAttendanceAccess(userId: string, classId: string) {
           name: true,
           section: true,
           status: true,
+          scheduleStartTime: true,
+          scheduleEndTime: true,
           course: {
             select: {
               code: true,
@@ -528,10 +533,20 @@ export async function getTeacherAttendanceSaveContext(input: {
 export function buildTeacherManualAttendanceSession(input: {
   classId: string
   dateInput: string
+  scheduleStartTime?: string | null
+  scheduleEndTime?: string | null
 }) {
   const sessionDate = new Date(`${input.dateInput}T00:00:00`)
-  const startTime = new Date(`${input.dateInput}T09:00:00`)
-  const endTime = new Date(`${input.dateInput}T10:00:00`)
+  const startTime = buildDateTimeFromDateInputAndTime(
+    input.dateInput,
+    input.scheduleStartTime,
+    9
+  )
+  const endTime = buildDateTimeFromDateInputAndTime(
+    input.dateInput,
+    input.scheduleEndTime,
+    10
+  )
 
   return {
     classId: input.classId,

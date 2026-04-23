@@ -25,6 +25,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  formatLateThresholdLabel,
+  getEffectiveSessionMeetingSettings,
+  getMeetingPlatformLabel,
+} from "@/lib/attendance-utils"
 
 interface ClassDetailPageProps {
   params: {
@@ -151,13 +156,6 @@ export default async function StudentClassDetailPage({
     notFound()
   }
 
-  const platformLabels: Record<string, string> = {
-    zoom: "Zoom",
-    google_meet: "Google Meet",
-    teams: "Microsoft Teams",
-    in_person: "In Person",
-  }
-
   const upcomingSessions = classData.sessions.filter(
     (sessionItem) =>
       sessionItem.status === "scheduled" || sessionItem.status === "ongoing"
@@ -220,6 +218,38 @@ export default async function StudentClassDetailPage({
                     Description
                   </p>
                   <p className="text-sm">{classData.course.description}</p>
+                </div>
+              ) : null}
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Attendance Rule
+                </p>
+                <p className="text-sm">
+                  {formatLateThresholdLabel(classData.lateThresholdMinutes)}
+                </p>
+              </div>
+              {classData.defaultMeetingPlatform !== "in_person" ? (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Default Online Class Link
+                  </p>
+                  <p className="text-sm">
+                    {getMeetingPlatformLabel(classData.defaultMeetingPlatform)}
+                  </p>
+                  {classData.defaultMeetingLink ? (
+                    <a
+                      href={classData.defaultMeetingLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block truncate text-sm text-blue-600 hover:underline"
+                    >
+                      {classData.defaultMeetingLink}
+                    </a>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Admin has not added the class meeting link yet.
+                    </p>
+                  )}
                 </div>
               ) : null}
             </CardContent>
@@ -285,6 +315,12 @@ export default async function StudentClassDetailPage({
                 <div className="space-y-3">
                   {upcomingSessions.map((sessionItem) => {
                     const studentAttendance = sessionItem.attendances[0] || null
+                    const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+                      sessionMeetingPlatform: sessionItem.meetingPlatform,
+                      sessionMeetingLink: sessionItem.meetingLink,
+                      classMeetingPlatform: classData.defaultMeetingPlatform,
+                      classMeetingLink: classData.defaultMeetingLink,
+                    })
                     const joinStatus =
                       studentAttendance?.joinTime
                         ? (studentAttendance.lateMinutes || 0) > 0
@@ -323,25 +359,32 @@ export default async function StudentClassDetailPage({
                             </span>
                           </div>
                           <div className="flex items-center gap-1 text-sm">
-                            {sessionItem.meetingPlatform === "in_person" ? (
+                            {effectiveMeetingSettings.platform === "in_person" ? (
                               <MapPin className="h-3 w-3" />
                             ) : (
                               <Video className="h-3 w-3" />
                             )}
                             <span className="text-muted-foreground">
-                              {platformLabels[sessionItem.meetingPlatform]}
+                              {getMeetingPlatformLabel(
+                                effectiveMeetingSettings.platform
+                              )}
                             </span>
                           </div>
-                          {sessionItem.meetingPlatform !== "in_person" ? (
-                            sessionItem.meetingLink ? (
+                          {effectiveMeetingSettings.platform !== "in_person" ? (
+                            effectiveMeetingSettings.link ? (
                               <p className="truncate text-xs text-blue-600">
-                                {sessionItem.meetingLink}
+                                {effectiveMeetingSettings.link}
                               </p>
                             ) : (
                               <p className="text-xs text-muted-foreground">
                                 Meeting link has not been added yet.
                               </p>
                             )
+                          ) : null}
+                          {effectiveMeetingSettings.inheritedFromClass ? (
+                            <p className="text-xs text-muted-foreground">
+                              Using the class default meeting link.
+                            </p>
                           ) : null}
                           {studentAttendance?.joinTime ? (
                             <div className="space-y-1 text-sm text-muted-foreground">
@@ -361,8 +404,8 @@ export default async function StudentClassDetailPage({
                         <JoinSessionButton
                           sessionId={sessionItem.id}
                           sessionStatus={sessionItem.status}
-                          meetingPlatform={sessionItem.meetingPlatform}
-                          meetingLink={sessionItem.meetingLink}
+                          meetingPlatform={effectiveMeetingSettings.platform}
+                          meetingLink={effectiveMeetingSettings.link}
                           initialAttendance={
                             studentAttendance
                               ? {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { getEffectiveSessionMeetingSettings } from "@/lib/attendance-utils"
 import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { prisma } from "@/lib/prisma"
 import { getTeacherClassSessionsPageData } from "@/lib/teacher/teacher-class-data"
@@ -31,6 +32,18 @@ async function verifyClassAccess(classId: string, userId: string, role: string) 
     select: {
       id: true,
       academyId: true,
+      name: true,
+      scheduleStartTime: true,
+      scheduleEndTime: true,
+      defaultMeetingPlatform: true,
+      defaultMeetingLink: true,
+      lateThresholdMinutes: true,
+      course: {
+        select: {
+          code: true,
+          name: true,
+        },
+      },
     },
   })
 
@@ -218,6 +231,26 @@ export async function POST(
       )
     }
 
+    const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+      sessionMeetingPlatform: validated.data.meetingPlatform,
+      sessionMeetingLink: validated.data.meetingLink || null,
+      classMeetingPlatform: access.classData.defaultMeetingPlatform,
+      classMeetingLink: access.classData.defaultMeetingLink,
+    })
+
+    if (
+      effectiveMeetingSettings.platform !== "in_person" &&
+      !effectiveMeetingSettings.link
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Add a session meeting link or configure a default class meeting link for online sessions.",
+        },
+        { status: 400 }
+      )
+    }
+
     const newSession = await prisma.classSession.create({
       data: {
         classId: params.classId,
@@ -225,8 +258,15 @@ export async function POST(
         sessionDate,
         startTime,
         endTime,
-        meetingLink: validated.data.meetingLink || null,
-        meetingPlatform: validated.data.meetingPlatform,
+        meetingLink:
+          validated.data.meetingLink === ""
+            ? null
+            : validated.data.meetingLink || null,
+        meetingPlatform: effectiveMeetingSettings.platform as
+          | "zoom"
+          | "google_meet"
+          | "teams"
+          | "in_person",
         status: "scheduled",
       },
     })

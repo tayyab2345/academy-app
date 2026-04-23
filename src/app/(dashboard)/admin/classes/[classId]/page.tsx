@@ -9,12 +9,19 @@ import { prisma } from "@/lib/prisma"
 import {
   ArrowLeft,
   CalendarDays,
-  Pencil,
-  Users,
+  Clock,
   GraduationCap,
+  MapPin,
+  Pencil,
   Trash2,
+  Users,
+  Video,
 } from "lucide-react"
 
+import { AssignTeacherDialog } from "@/components/admin/classes/assign-teacher-dialog"
+import { EnrollStudentsDialog } from "@/components/admin/classes/enroll-students-dialog"
+import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -23,12 +30,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { AssignTeacherDialog } from "@/components/admin/classes/assign-teacher-dialog"
-import { EnrollStudentsDialog } from "@/components/admin/classes/enroll-students-dialog"
-import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import {
+  formatLateThresholdLabel,
+  getMeetingPlatformLabel,
+} from "@/lib/attendance-utils"
 
 interface ClassDetailPageProps {
   params: {
@@ -122,6 +129,16 @@ async function fetchClass(classId: string) {
           startTime: true,
           endTime: true,
           status: true,
+          meetingPlatform: true,
+          meetingLink: true,
+          attendances: {
+            where: {
+              status: "late",
+            },
+            select: {
+              id: true,
+            },
+          },
         },
         orderBy: {
           startTime: "asc",
@@ -152,6 +169,19 @@ export async function generateMetadata({
   }
 }
 
+function getStatusBadge(status: string) {
+  switch (status) {
+    case "active":
+      return <Badge variant="success">Active</Badge>
+    case "completed":
+      return <Badge variant="secondary">Completed</Badge>
+    case "cancelled":
+      return <Badge variant="destructive">Cancelled</Badge>
+    default:
+      return <Badge>{status}</Badge>
+  }
+}
+
 export default async function ClassDetailPage({
   params,
 }: ClassDetailPageProps) {
@@ -161,8 +191,12 @@ export default async function ClassDetailPage({
     notFound()
   }
 
-  const existingTeacherIds = classData.teachers.map((teacher) => teacher.teacherProfile.id)
-  const existingStudentIds = classData.enrollments.map((enrollment) => enrollment.studentProfile.id)
+  const existingTeacherIds = classData.teachers.map(
+    (teacher) => teacher.teacherProfile.id
+  )
+  const existingStudentIds = classData.enrollments.map(
+    (enrollment) => enrollment.studentProfile.id
+  )
   const teacherOptions = await getAdminTeacherAssignmentOptions(
     classData.academyId
   )
@@ -236,22 +270,9 @@ export default async function ClassDetailPage({
     revalidatePath("/admin/classes")
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Badge variant="success">Active</Badge>
-      case "completed":
-        return <Badge variant="secondary">Completed</Badge>
-      case "cancelled":
-        return <Badge variant="destructive">Cancelled</Badge>
-      default:
-        return <Badge>{status}</Badge>
-    }
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link href="/admin/classes">
             <Button variant="ghost" size="icon">
@@ -263,9 +284,9 @@ export default async function ClassDetailPage({
               <h2 className="text-2xl font-bold tracking-tight">
                 {classData.name}
               </h2>
-              {classData.section && (
+              {classData.section ? (
                 <Badge variant="outline">Section {classData.section}</Badge>
-              )}
+              ) : null}
               {getStatusBadge(classData.status)}
             </div>
             <p className="text-muted-foreground">
@@ -289,25 +310,33 @@ export default async function ClassDetailPage({
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Course</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Course
+                </p>
                 <p className="font-medium">{classData.course.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  {classData.course.subjectArea} • {classData.course.gradeLevel}
+                  {classData.course.subjectArea} - {classData.course.gradeLevel}
                 </p>
               </div>
               <Separator />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Academic Year</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Academic Year
+                </p>
                 <p>{classData.academicYear}</p>
               </div>
               <Separator />
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Start Date</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Start Date
+                  </p>
                   <p>{new Date(classData.startDate).toLocaleDateString()}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">End Date</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    End Date
+                  </p>
                   <p>{new Date(classData.endDate).toLocaleDateString()}</p>
                 </div>
               </div>
@@ -360,11 +389,87 @@ export default async function ClassDetailPage({
                             minute: "2-digit",
                           })}
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            {sessionItem.meetingPlatform === "in_person" ? (
+                              <MapPin className="h-3 w-3" />
+                            ) : (
+                              <Video className="h-3 w-3" />
+                            )}
+                            {getMeetingPlatformLabel(sessionItem.meetingPlatform)}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {sessionItem.attendances.length} late join
+                            {sessionItem.attendances.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        {sessionItem.meetingLink ? (
+                          <a
+                            href={sessionItem.meetingLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 block truncate text-xs text-blue-600 hover:underline"
+                          >
+                            {sessionItem.meetingLink}
+                          </a>
+                        ) : null}
                       </div>
                     ))}
                   </div>
                 </div>
               ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Video className="h-5 w-5" />
+                Online Setup & Attendance Rules
+              </CardTitle>
+              <CardDescription>
+                Defaults applied at the class level by admin
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Default meeting platform
+                </p>
+                <p>{getMeetingPlatformLabel(classData.defaultMeetingPlatform)}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Late join rule
+                </p>
+                <p>{formatLateThresholdLabel(classData.lateThresholdMinutes)}</p>
+              </div>
+              {classData.defaultMeetingPlatform !== "in_person" ? (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Default class meeting link
+                  </p>
+                  {classData.defaultMeetingLink ? (
+                    <a
+                      href={classData.defaultMeetingLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block truncate text-sm text-blue-600 hover:underline"
+                    >
+                      {classData.defaultMeetingLink}
+                    </a>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No default class meeting link has been added yet.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  This class is currently configured for in-person teaching.
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -378,14 +483,18 @@ export default async function ClassDetailPage({
                   <Users className="h-4 w-4 text-muted-foreground" />
                   Students Enrolled
                 </span>
-                <span className="text-2xl font-bold">{classData._count.enrollments}</span>
+                <span className="text-2xl font-bold">
+                  {classData._count.enrollments}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <GraduationCap className="h-4 w-4 text-muted-foreground" />
                   Teachers Assigned
                 </span>
-                <span className="text-2xl font-bold">{classData.teachers.length}</span>
+                <span className="text-2xl font-bold">
+                  {classData.teachers.length}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -437,8 +546,16 @@ export default async function ClassDetailPage({
                               {assignment.teacherProfile.user.firstName}{" "}
                               {assignment.teacherProfile.user.lastName}
                             </p>
-                            <Badge variant={assignment.role === "primary" ? "default" : "outline"}>
-                              {assignment.role === "primary" ? "Primary" : "Assistant"}
+                            <Badge
+                              variant={
+                                assignment.role === "primary"
+                                  ? "default"
+                                  : "outline"
+                              }
+                            >
+                              {assignment.role === "primary"
+                                ? "Primary"
+                                : "Assistant"}
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
@@ -446,10 +563,12 @@ export default async function ClassDetailPage({
                           </p>
                         </div>
                       </div>
-                      <form action={async () => {
-                        "use server"
-                        await removeTeacher(assignment.teacherProfile.id)
-                      }}>
+                      <form
+                        action={async () => {
+                          "use server"
+                          await removeTeacher(assignment.teacherProfile.id)
+                        }}
+                      >
                         <Button variant="ghost" size="icon" type="submit">
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -469,7 +588,8 @@ export default async function ClassDetailPage({
                   Enrolled Students
                 </CardTitle>
                 <CardDescription>
-                  {classData._count.enrollments} student{classData._count.enrollments !== 1 ? "s" : ""} enrolled
+                  {classData._count.enrollments} student
+                  {classData._count.enrollments !== 1 ? "s" : ""} enrolled
                 </CardDescription>
               </div>
               <EnrollStudentsDialog
@@ -510,10 +630,12 @@ export default async function ClassDetailPage({
                           </p>
                         </div>
                       </div>
-                      <form action={async () => {
-                        "use server"
-                        await removeStudent(enrollment.studentProfile.id)
-                      }}>
+                      <form
+                        action={async () => {
+                          "use server"
+                          await removeStudent(enrollment.studentProfile.id)
+                        }}
+                      >
                         <Button variant="ghost" size="icon" type="submit">
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>

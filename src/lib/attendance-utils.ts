@@ -8,6 +8,19 @@ export interface SessionJoinCalculation {
   lateMinutes: number
 }
 
+export interface SessionMeetingSettingsInput {
+  sessionMeetingPlatform?: string | null
+  sessionMeetingLink?: string | null
+  classMeetingPlatform?: string | null
+  classMeetingLink?: string | null
+}
+
+export interface EffectiveSessionMeetingSettings {
+  platform: string
+  link: string | null
+  inheritedFromClass: boolean
+}
+
 export const LATE_THRESHOLD_MINUTES = 5
 
 export function calculateAttendanceStatus(
@@ -40,12 +53,13 @@ export function calculateAttendanceStatus(
 
 export function calculateSessionJoinStatus(
   scheduledStartTime: Date,
-  actualJoinTime: Date
+  actualJoinTime: Date,
+  lateThreshold: number = 0
 ): SessionJoinCalculation {
   const diffMs = actualJoinTime.getTime() - scheduledStartTime.getTime()
   const diffMinutes = Math.max(0, Math.floor(diffMs / (1000 * 60)))
 
-  if (diffMinutes > 0) {
+  if (diffMinutes > lateThreshold) {
     return {
       status: "late",
       lateMinutes: diffMinutes,
@@ -55,6 +69,70 @@ export function calculateSessionJoinStatus(
   return {
     status: "on_time",
     lateMinutes: 0,
+  }
+}
+
+export function formatLateThresholdLabel(lateThresholdMinutes: number) {
+  if (lateThresholdMinutes <= 0) {
+    return "Any delay counts as late"
+  }
+
+  return `Late after ${lateThresholdMinutes} minute${
+    lateThresholdMinutes === 1 ? "" : "s"
+  }`
+}
+
+export function getMeetingPlatformLabel(platform: string | null | undefined) {
+  switch (platform) {
+    case "zoom":
+      return "Zoom"
+    case "google_meet":
+      return "Google Meet"
+    case "teams":
+      return "Microsoft Teams"
+    case "in_person":
+      return "In Person"
+    default:
+      return platform || "Not set"
+  }
+}
+
+export function getEffectiveSessionMeetingSettings(
+  input: SessionMeetingSettingsInput
+): EffectiveSessionMeetingSettings {
+  const sessionMeetingPlatform = input.sessionMeetingPlatform || "in_person"
+  const sessionMeetingLink = input.sessionMeetingLink || null
+  const classMeetingPlatform = input.classMeetingPlatform || "in_person"
+  const classMeetingLink = input.classMeetingLink || null
+
+  if (sessionMeetingLink) {
+    return {
+      platform: sessionMeetingPlatform,
+      link: sessionMeetingLink,
+      inheritedFromClass: false,
+    }
+  }
+
+  if (sessionMeetingPlatform !== "in_person") {
+    if (classMeetingPlatform === sessionMeetingPlatform && classMeetingLink) {
+      return {
+        platform: sessionMeetingPlatform,
+        link: classMeetingLink,
+        inheritedFromClass: true,
+      }
+    }
+
+    return {
+      platform: sessionMeetingPlatform,
+      link: null,
+      inheritedFromClass: false,
+    }
+  }
+
+  return {
+    platform: sessionMeetingPlatform,
+    link: null,
+    inheritedFromClass: false,
   }
 }
 

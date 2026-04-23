@@ -25,7 +25,12 @@ import {
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AttendanceGrid } from "@/components/teacher/attendance/attendance-grid"
-import { getSessionStatusBadge } from "@/lib/attendance-utils"
+import {
+  formatLateThresholdLabel,
+  getEffectiveSessionMeetingSettings,
+  getMeetingPlatformLabel,
+  getSessionStatusBadge,
+} from "@/lib/attendance-utils"
 import { TeacherJoinSessionCard } from "@/components/teacher/sessions/teacher-join-session-card"
 
 interface SessionDetailPageProps {
@@ -45,7 +50,13 @@ async function fetchSessionData(sessionId: string) {
     where: { id: sessionId },
     include: {
       class: {
-        include: {
+        select: {
+          id: true,
+          name: true,
+          academyId: true,
+          defaultMeetingLink: true,
+          defaultMeetingPlatform: true,
+          lateThresholdMinutes: true,
           course: {
             select: {
               code: true,
@@ -192,13 +203,12 @@ export default async function SessionDetailPage({
 
   const { session: classSession, students, teacherJoin, canTrackTeacherJoin } = data
   const statusBadge = getSessionStatusBadge(classSession.status)
-
-  const platformLabels: Record<string, string> = {
-    zoom: "Zoom",
-    google_meet: "Google Meet",
-    teams: "Microsoft Teams",
-    in_person: "In Person",
-  }
+  const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+    sessionMeetingPlatform: classSession.meetingPlatform,
+    sessionMeetingLink: classSession.meetingLink,
+    classMeetingPlatform: classSession.class.defaultMeetingPlatform,
+    classMeetingLink: classSession.class.defaultMeetingLink,
+  })
 
   async function markAttendance(studentId: string, status: string) {
     "use server"
@@ -317,31 +327,40 @@ export default async function SessionDetailPage({
             </div>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                {classSession.meetingPlatform === "in_person" ? (
+                {effectiveMeetingSettings.platform === "in_person" ? (
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                 ) : (
                   <Video className="h-4 w-4 text-muted-foreground" />
                 )}
-                <span>{platformLabels[classSession.meetingPlatform]}</span>
+                <span>{getMeetingPlatformLabel(effectiveMeetingSettings.platform)}</span>
               </div>
-              {classSession.meetingLink && (
+              {effectiveMeetingSettings.link && (
                 <div className="flex items-center gap-2">
                   <a
-                    href={classSession.meetingLink}
+                    href={effectiveMeetingSettings.link}
                     target="_blank"
                     rel="noreferrer"
                     className="truncate text-sm text-blue-600 hover:underline"
                   >
-                    {classSession.meetingLink}
+                    {effectiveMeetingSettings.link}
                   </a>
                 </div>
               )}
-              {!classSession.meetingLink &&
-              classSession.meetingPlatform !== "in_person" ? (
+              {effectiveMeetingSettings.inheritedFromClass ? (
+                <p className="text-sm text-muted-foreground">
+                  Using the class default meeting link configured by admin.
+                </p>
+              ) : null}
+              {!effectiveMeetingSettings.link &&
+              effectiveMeetingSettings.platform !== "in_person" ? (
                 <p className="text-sm text-muted-foreground">
                   No meeting link has been added for this session yet.
                 </p>
               ) : null}
+              <p className="text-sm text-muted-foreground">
+                Student late rule:{" "}
+                {formatLateThresholdLabel(classSession.class.lateThresholdMinutes)}
+              </p>
             </div>
           </div>
 
@@ -350,8 +369,8 @@ export default async function SessionDetailPage({
               <TeacherJoinSessionCard
                 sessionId={classSession.id}
                 sessionStatus={classSession.status}
-                meetingPlatform={classSession.meetingPlatform}
-                meetingLink={classSession.meetingLink}
+                meetingPlatform={effectiveMeetingSettings.platform}
+                meetingLink={effectiveMeetingSettings.link}
                 initialJoin={teacherJoin}
               />
             </div>

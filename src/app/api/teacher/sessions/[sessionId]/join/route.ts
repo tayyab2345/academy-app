@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { calculateSessionJoinStatus } from "@/lib/attendance-utils"
+import {
+  calculateSessionJoinStatus,
+  getEffectiveSessionMeetingSettings,
+} from "@/lib/attendance-utils"
 import { notifyTeacherLateJoin } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
 
@@ -37,6 +40,12 @@ export async function POST(
         status: true,
         meetingLink: true,
         meetingPlatform: true,
+        class: {
+          select: {
+            defaultMeetingLink: true,
+            defaultMeetingPlatform: true,
+          },
+        },
       },
     })
 
@@ -71,9 +80,16 @@ export async function POST(
       )
     }
 
+    const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+      sessionMeetingPlatform: classSession.meetingPlatform,
+      sessionMeetingLink: classSession.meetingLink,
+      classMeetingPlatform: classSession.class.defaultMeetingPlatform,
+      classMeetingLink: classSession.class.defaultMeetingLink,
+    })
+
     if (
-      classSession.meetingPlatform !== "in_person" &&
-      !classSession.meetingLink
+      effectiveMeetingSettings.platform !== "in_person" &&
+      !effectiveMeetingSettings.link
     ) {
       return NextResponse.json(
         { error: "Meeting link has not been added yet" },
@@ -95,7 +111,8 @@ export async function POST(
         success: true,
         alreadyJoined: true,
         teacherJoin: existingJoin,
-        meetingLink: classSession.meetingLink,
+        meetingLink: effectiveMeetingSettings.link,
+        meetingPlatform: effectiveMeetingSettings.platform,
       })
     }
 
@@ -125,7 +142,8 @@ export async function POST(
       alreadyJoined: false,
       teacherJoin,
       joinTracking: joinResult,
-      meetingLink: classSession.meetingLink,
+      meetingLink: effectiveMeetingSettings.link,
+      meetingPlatform: effectiveMeetingSettings.platform,
     })
   } catch (error) {
     console.error("Failed to record teacher join:", error)

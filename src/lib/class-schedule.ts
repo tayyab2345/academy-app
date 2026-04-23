@@ -49,13 +49,14 @@ export function isClassWeekday(value: string): value is ClassWeekdayValue {
   return CLASS_WEEKDAY_VALUES.includes(value as ClassWeekdayValue)
 }
 
-export function sortClassScheduleDays(days: readonly string[] | null | undefined) {
-  return Array.from(
-    new Set((days || []).filter(isClassWeekday))
-  )
-    .sort((left, right) => {
+export function sortClassScheduleDays(
+  days: readonly string[] | null | undefined
+) {
+  return Array.from(new Set((days || []).filter(isClassWeekday))).sort(
+    (left, right) => {
       return (weekdayOrder.get(left) ?? 0) - (weekdayOrder.get(right) ?? 0)
-    })
+    }
+  )
 }
 
 export function hasConfiguredClassSchedule(schedule: ClassScheduleShape) {
@@ -126,7 +127,9 @@ export function formatClassScheduleTimeRange(
   return `${formattedStart} - ${formattedEnd}`
 }
 
-export function getClassRecurrenceLabel(recurrence: string | null | undefined) {
+export function getClassRecurrenceLabel(
+  recurrence: string | null | undefined
+) {
   if (recurrence === "custom") {
     return "Custom recurring pattern"
   }
@@ -147,5 +150,28 @@ export function getClassScheduleSummaryText(schedule: ClassScheduleShape) {
     schedule.scheduleEndTime
   )
 
-  return timeText ? `${dayText} • ${timeText}` : dayText
+  return timeText ? `${dayText} - ${timeText}` : dayText
+}
+
+export function buildDateTimeFromDateInputAndTime(
+  dateInput: string,
+  timeInput: string | null | undefined,
+  fallbackHour: number,
+  fallbackMinute: number = 0
+) {
+  const parsedTime = parseTimeParts(timeInput)
+
+  if (parsedTime) {
+    return new Date(
+      `${dateInput}T${parsedTime.hours.toString().padStart(2, "0")}:${parsedTime.minutes
+        .toString()
+        .padStart(2, "0")}:00`
+    )
+  }
+
+  return new Date(
+    `${dateInput}T${fallbackHour.toString().padStart(2, "0")}:${fallbackMinute
+      .toString()
+      .padStart(2, "0")}:00`
+  )
 }

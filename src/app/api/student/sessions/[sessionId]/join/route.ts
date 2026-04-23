@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import {
+  calculateAttendanceStatus,
+  getEffectiveSessionMeetingSettings,
+} from "@/lib/attendance-utils"
 import { notifyStudentLateJoin } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
-import { calculateSessionJoinStatus } from "@/lib/attendance-utils"
 
 export async function POST(
   _req: NextRequest,
@@ -36,6 +39,13 @@ export async function POST(
         status: true,
         meetingLink: true,
         meetingPlatform: true,
+        class: {
+          select: {
+            lateThresholdMinutes: true,
+            defaultMeetingLink: true,
+            defaultMeetingPlatform: true,
+          },
+        },
       },
     })
 
@@ -69,9 +79,16 @@ export async function POST(
       )
     }
 
+    const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+      sessionMeetingPlatform: classSession.meetingPlatform,
+      sessionMeetingLink: classSession.meetingLink,
+      classMeetingPlatform: classSession.class.defaultMeetingPlatform,
+      classMeetingLink: classSession.class.defaultMeetingLink,
+    })
+
     if (
-      classSession.meetingPlatform !== "in_person" &&
-      !classSession.meetingLink
+      effectiveMeetingSettings.platform !== "in_person" &&
+      !effectiveMeetingSettings.link
     ) {
       return NextResponse.json(
         { error: "Meeting link has not been added yet" },
@@ -100,14 +117,16 @@ export async function POST(
         success: true,
         alreadyJoined: true,
         attendance: existingAttendance,
-        meetingLink: classSession.meetingLink,
+        meetingLink: effectiveMeetingSettings.link,
+        meetingPlatform: effectiveMeetingSettings.platform,
       })
     }
 
     const joinTime = new Date()
-    const joinResult = calculateSessionJoinStatus(
+    const joinResult = calculateAttendanceStatus(
       classSession.startTime,
-      joinTime
+      joinTime,
+      classSession.class.lateThresholdMinutes
     )
 
     const attendance = await prisma.attendance.upsert({
@@ -146,7 +165,8 @@ export async function POST(
       alreadyJoined: false,
       attendance,
       joinTracking: joinResult,
-      meetingLink: classSession.meetingLink,
+      meetingLink: effectiveMeetingSettings.link,
+      meetingPlatform: effectiveMeetingSettings.platform,
     })
   } catch (error) {
     console.error("Failed to record join:", error)

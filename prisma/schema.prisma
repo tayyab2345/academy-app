@@ -265,6 +265,9 @@ model Class {
   scheduleStartTime String? @map("schedule_start_time")
   scheduleEndTime String? @map("schedule_end_time")
   scheduleRecurrence ClassRecurrencePattern @default(weekly) @map("schedule_recurrence")
+  defaultMeetingLink String? @map("default_meeting_link")
+  defaultMeetingPlatform MeetingPlatform @default(in_person) @map("default_meeting_platform")
+  lateThresholdMinutes Int @default(5) @map("late_threshold_minutes")
 
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")

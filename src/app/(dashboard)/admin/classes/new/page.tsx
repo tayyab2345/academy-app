@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import {
   getAdminCourseOptions,
+  getAdminStudentAssignmentOptions,
   getAdminTeacherAssignmentOptions,
 } from "@/lib/admin/admin-lists-data"
 import { ClassForm } from "@/components/admin/classes/class-form"
@@ -29,9 +30,10 @@ export default async function NewClassPage({ searchParams }: NewClassPageProps) 
   const initialData = searchParams.courseId
     ? { courseId: searchParams.courseId }
     : undefined
-  const [courses, teacherOptions] = await Promise.all([
+  const [courses, teacherOptions, studentOptions] = await Promise.all([
     getAdminCourseOptions(session.user.academyId, false),
     getAdminTeacherAssignmentOptions(session.user.academyId),
+    getAdminStudentAssignmentOptions(session.user.academyId),
   ])
 
   return (
@@ -46,6 +48,7 @@ export default async function NewClassPage({ searchParams }: NewClassPageProps) 
         initialData={initialData}
         courses={courses}
         teacherOptions={teacherOptions}
+        studentOptions={studentOptions}
       />
     </div>
   )

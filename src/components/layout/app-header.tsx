@@ -1,6 +1,6 @@
 "use client"
 
-import { useSession } from "next-auth/react"
+import type { Session } from "next-auth"
 import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NotificationBell } from "@/components/notifications/notification-bell"
@@ -8,26 +8,27 @@ import { AcademyLogo } from "@/components/ui/academy-logo"
 import { UserNav } from "./user-nav"
 
 interface AppHeaderProps {
+  currentUser: Session["user"]
   onMenuClick?: () => void
   showMobileMenu?: boolean
   unreadNotificationCount: number
 }
 
 export function AppHeader({
+  currentUser,
   onMenuClick,
   showMobileMenu = false,
   unreadNotificationCount,
 }: AppHeaderProps) {
-  const { data: session } = useSession()
-  const firstName = session?.user.firstName?.trim() || "there"
-  const academyName = session?.user.academy?.name?.trim() || "AcademyFlow"
+  const firstName = currentUser.firstName?.trim() || "there"
+  const academyName = currentUser.academy?.name?.trim() || "AcademyFlow"
 
   return (
     <header
       className="sticky top-0 z-40 border-b bg-background"
       style={{
-        borderColor: session?.user.academy?.primaryColor
-          ? `${session.user.academy.primaryColor}20`
+        borderColor: currentUser.academy?.primaryColor
+          ? `${currentUser.academy.primaryColor}20`
           : undefined
       }}
     >
@@ -58,9 +59,9 @@ export function AppHeader({
         <div className="flex items-center gap-3">
           <div className="hidden items-center gap-3 rounded-full border px-3 py-1.5 lg:flex">
             <AcademyLogo
-              name={session?.user.academy?.name}
-              logoUrl={session?.user.academy?.logoUrl}
-              primaryColor={session?.user.academy?.primaryColor}
+              name={currentUser.academy?.name}
+              logoUrl={currentUser.academy?.logoUrl}
+              primaryColor={currentUser.academy?.primaryColor}
               className="h-8 w-8"
               iconClassName="h-4 w-4"
             />
@@ -74,7 +75,7 @@ export function AppHeader({
             </div>
           </div>
           <NotificationBell initialUnreadCount={unreadNotificationCount} />
-          <UserNav />
+          <UserNav currentUser={currentUser} />
         </div>
       </div>
 
@@ -87,9 +88,9 @@ export function AppHeader({
         </p>
         <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
           <AcademyLogo
-            name={session?.user.academy?.name}
-            logoUrl={session?.user.academy?.logoUrl}
-            primaryColor={session?.user.academy?.primaryColor}
+            name={currentUser.academy?.name}
+            logoUrl={currentUser.academy?.logoUrl}
+            primaryColor={currentUser.academy?.primaryColor}
             className="h-6 w-6"
             iconClassName="h-3 w-3"
           />

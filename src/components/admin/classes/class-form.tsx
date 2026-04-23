@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -34,10 +34,19 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Combobox } from "@/components/ui/combobox"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   CLASS_WEEKDAY_VALUES,
   getClassWeekdayLabel,
 } from "@/lib/class-schedule"
+import { UserAvatar } from "@/components/ui/user-avatar"
+
+const meetingPlatforms = [
+  { value: "in_person", label: "In Person" },
+  { value: "zoom", label: "Zoom" },
+  { value: "google_meet", label: "Google Meet" },
+  { value: "teams", label: "Microsoft Teams" },
+] as const
 
 const academicYears = [
   "2023-2024",
@@ -58,6 +67,21 @@ const formSchema = z
     scheduleDays: z.array(z.enum(CLASS_WEEKDAY_VALUES)).default([]),
     scheduleStartTime: z.string().optional(),
     scheduleEndTime: z.string().optional(),
+    defaultMeetingPlatform: z
+      .enum(["zoom", "google_meet", "teams", "in_person"])
+      .default("in_person"),
+    defaultMeetingLink: z
+      .string()
+      .url("Enter a valid meeting link")
+      .optional()
+      .or(z.literal("")),
+    lateThresholdMinutes: z.coerce
+      .number()
+      .int()
+      .min(0, "Late threshold must be 0 minutes or more")
+      .max(120, "Late threshold must be 120 minutes or less")
+      .default(5),
+    studentProfileIds: z.array(z.string()).default([]),
   })
   .superRefine((data, ctx) => {
     if (new Date(data.endDate).getTime() < new Date(data.startDate).getTime()) {
@@ -112,6 +136,17 @@ const formSchema = z
         path: ["scheduleEndTime"],
       })
     }
+
+    if (
+      data.defaultMeetingPlatform !== "in_person" &&
+      !data.defaultMeetingLink
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Meeting link is required for online classes",
+        path: ["defaultMeetingLink"],
+      })
+    }
   })
 
 type FormValues = z.infer<typeof formSchema>
@@ -134,6 +169,19 @@ interface TeacherOption {
   }
 }
 
+interface StudentOption {
+  id: string
+  studentId: string
+  gradeLevel: string
+  user: {
+    firstName: string
+    lastName: string
+    email: string
+    avatarUrl?: string | null
+    isActive: boolean
+  }
+}
+
 interface ClassFormProps {
   initialData?: Partial<FormValues> & {
     id?: string
@@ -142,6 +190,7 @@ interface ClassFormProps {
   isEditing?: boolean
   courses: Course[]
   teacherOptions: TeacherOption[]
+  studentOptions: StudentOption[]
 }
 
 export function ClassForm({
@@ -149,6 +198,7 @@ export function ClassForm({
   isEditing = false,
   courses,
   teacherOptions,
+  studentOptions,
 }: ClassFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -173,6 +223,10 @@ export function ClassForm({
       scheduleDays: initialData?.scheduleDays || [],
       scheduleStartTime: initialData?.scheduleStartTime || "",
       scheduleEndTime: initialData?.scheduleEndTime || "",
+      defaultMeetingPlatform: initialData?.defaultMeetingPlatform || "in_person",
+      defaultMeetingLink: initialData?.defaultMeetingLink || "",
+      lateThresholdMinutes: initialData?.lateThresholdMinutes ?? 5,
+      studentProfileIds: initialData?.studentProfileIds || [],
     },
   })
 
@@ -185,6 +239,71 @@ export function ClassForm({
   const activeTeacherCount = teacherOptions.filter(
     (teacher) => teacher.user.isActive
   ).length
+  const selectedCourseId = form.watch("courseId")
+  const selectedMeetingPlatform = form.watch("defaultMeetingPlatform")
+  const selectedStudentIds = form.watch("studentProfileIds")
+  const selectedCourse = useMemo(
+    () => courses.find((course) => course.id === selectedCourseId) || null,
+    [courses, selectedCourseId]
+  )
+  const eligibleStudentOptions = useMemo(() => {
+    if (!selectedCourse) {
+      return []
+    }
+
+    return studentOptions.filter(
+      (student) => student.gradeLevel === selectedCourse.gradeLevel
+    )
+  }, [selectedCourse, studentOptions])
+
+  useEffect(() => {
+    if (!selectedCourse) {
+      if ((selectedStudentIds || []).length > 0) {
+        form.setValue("studentProfileIds", [], { shouldValidate: true })
+      }
+      return
+    }
+
+    const eligibleIds = new Set(eligibleStudentOptions.map((student) => student.id))
+    const filteredIds = (selectedStudentIds || []).filter((studentId) =>
+      eligibleIds.has(studentId)
+    )
+
+    if (filteredIds.length !== (selectedStudentIds || []).length) {
+      form.setValue("studentProfileIds", filteredIds, { shouldValidate: true })
+    }
+  }, [eligibleStudentOptions, form, selectedCourse, selectedStudentIds])
+
+  const toggleStudentSelection = (studentProfileId: string) => {
+    const currentIds = new Set(form.getValues("studentProfileIds"))
+
+    if (currentIds.has(studentProfileId)) {
+      currentIds.delete(studentProfileId)
+    } else {
+      currentIds.add(studentProfileId)
+    }
+
+    form.setValue("studentProfileIds", Array.from(currentIds), {
+      shouldValidate: true,
+      shouldDirty: true,
+    })
+  }
+
+  const toggleAllEligibleStudents = () => {
+    const eligibleIds = eligibleStudentOptions.map((student) => student.id)
+    const allSelected =
+      eligibleIds.length > 0 &&
+      eligibleIds.every((studentId) => selectedStudentIds.includes(studentId))
+
+    form.setValue(
+      "studentProfileIds",
+      allSelected ? [] : eligibleIds,
+      {
+        shouldValidate: true,
+        shouldDirty: true,
+      }
+    )
+  }
 
   async function onSubmit(values: FormValues) {
     setIsLoading(true)
@@ -199,6 +318,7 @@ export function ClassForm({
       const submitValues = {
         ...values,
         teacherProfileId: values.teacherProfileId || undefined,
+        defaultMeetingLink: values.defaultMeetingLink || undefined,
       }
 
       const response = await fetch(url, {
@@ -470,6 +590,200 @@ export function ClassForm({
                 )}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Online Class & Attendance Rules</CardTitle>
+            <CardDescription>
+              Set the default join details and late rule that sessions and
+              student join tracking should follow.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="defaultMeetingPlatform"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Default Meeting Platform</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    disabled={isLoading}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select the class platform" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {meetingPlatforms.map((platform) => (
+                        <SelectItem key={platform.value} value={platform.value}>
+                          {platform.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Sessions can still override this, but this class-level setup
+                    is the main default.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {selectedMeetingPlatform !== "in_person" ? (
+              <FormField
+                control={form.control}
+                name="defaultMeetingLink"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Default Meeting Link</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="https://zoom.us/j/1234567890"
+                        disabled={isLoading}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Teachers and students will see this class join link when a
+                      session uses the class default.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
+
+            <FormField
+              control={form.control}
+              name="lateThresholdMinutes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Late Threshold (minutes)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={120}
+                      step={1}
+                      disabled={isLoading}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Example: set 5 so student joins after 5 minutes are marked
+                    late, with exact late minutes recorded.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Student Assignment</CardTitle>
+            <CardDescription>
+              {isEditing
+                ? "Manage the active student roster for this class. Unchecked active students will be removed from the class."
+                : "Select students to enroll when this class is created."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="studentProfileIds"
+              render={() => (
+                <FormItem>
+                  <FormLabel>Assigned Students</FormLabel>
+                  <FormDescription>
+                    {selectedCourse
+                      ? `Only students in ${selectedCourse.gradeLevel} are shown for ${selectedCourse.code}.`
+                      : "Select a course first to load eligible students."}
+                  </FormDescription>
+                  <FormControl>
+                    <div className="space-y-3">
+                      {selectedCourse ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={toggleAllEligibleStudents}
+                            disabled={isLoading || eligibleStudentOptions.length === 0}
+                          >
+                            {eligibleStudentOptions.length > 0 &&
+                            eligibleStudentOptions.every((student) =>
+                              selectedStudentIds.includes(student.id)
+                            )
+                              ? "Clear All"
+                              : "Select All Eligible"}
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            {selectedStudentIds.length} student
+                            {selectedStudentIds.length === 1 ? "" : "s"} selected
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {!selectedCourse ? (
+                        <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
+                          Choose a course first to assign students by grade level.
+                        </div>
+                      ) : eligibleStudentOptions.length === 0 ? (
+                        <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
+                          No active students are available in {selectedCourse.gradeLevel}.
+                        </div>
+                      ) : (
+                        <ScrollArea className="h-72 rounded-md border">
+                          <div className="space-y-1 p-2">
+                            {eligibleStudentOptions.map((student) => {
+                              const checked = selectedStudentIds.includes(student.id)
+
+                              return (
+                                <label
+                                  key={student.id}
+                                  className="flex cursor-pointer items-center gap-3 rounded-lg p-3 transition-colors hover:bg-muted/50"
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={() =>
+                                      toggleStudentSelection(student.id)
+                                    }
+                                    disabled={isLoading}
+                                  />
+                                  <UserAvatar
+                                    firstName={student.user.firstName}
+                                    lastName={student.user.lastName}
+                                    avatarUrl={student.user.avatarUrl}
+                                    className="h-10 w-10"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium">
+                                      {student.user.firstName} {student.user.lastName}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {student.studentId} - {student.user.email}
+                                    </p>
+                                  </div>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 

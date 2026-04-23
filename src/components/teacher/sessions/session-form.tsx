@@ -6,6 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Loader2, Save } from "lucide-react"
+import {
+  formatLateThresholdLabel,
+  getMeetingPlatformLabel,
+} from "@/lib/attendance-utils"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,28 +44,46 @@ const meetingPlatforms = [
   { value: "teams", label: "Microsoft Teams" },
 ] as const
 
-const formSchema = z.object({
-  title: z.string().optional(),
-  sessionDate: z.string().min(1, "Session date is required"),
-  startTime: z.string().min(1, "Start time is required"),
-  endTime: z.string().min(1, "End time is required"),
-  meetingLink: z.string().url().optional().or(z.literal("")),
-  meetingPlatform: z
-    .enum(["zoom", "google_meet", "teams", "in_person"])
-    .default("in_person"),
-})
+const formSchema = z
+  .object({
+    title: z.string().optional(),
+    sessionDate: z.string().min(1, "Session date is required"),
+    startTime: z.string().min(1, "Start time is required"),
+    endTime: z.string().min(1, "End time is required"),
+    meetingLink: z.string().url().optional().or(z.literal("")),
+    meetingPlatform: z
+      .enum(["zoom", "google_meet", "teams", "in_person"])
+      .default("in_person"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.meetingPlatform !== "in_person" && !data.meetingLink) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Meeting link is required for online sessions",
+        path: ["meetingLink"],
+      })
+    }
+  })
 
 type FormValues = z.infer<typeof formSchema>
 
 interface SessionFormProps {
   classId: string
   initialData?: Partial<FormValues> & { id?: string }
+  classDefaults?: {
+    scheduleStartTime?: string | null
+    scheduleEndTime?: string | null
+    defaultMeetingPlatform?: string | null
+    defaultMeetingLink?: string | null
+    lateThresholdMinutes?: number | null
+  }
   isEditing?: boolean
 }
 
 export function SessionForm({
   classId,
   initialData,
+  classDefaults,
   isEditing = false,
 }: SessionFormProps) {
   const router = useRouter()
@@ -156,10 +178,13 @@ export function SessionForm({
               name="sessionDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Date *</FormLabel>
+                  <FormLabel>Session Date *</FormLabel>
                   <FormControl>
                     <Input type="datetime-local" disabled={isLoading} {...field} />
                   </FormControl>
+                  <FormDescription>
+                    Set the calendar date for this class session.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -173,11 +198,16 @@ export function SessionForm({
                   <FormItem>
                     <FormLabel>Start Time *</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" disabled={isLoading} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                    <Input type="datetime-local" disabled={isLoading} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {classDefaults?.scheduleStartTime
+                      ? `Class default start time: ${classDefaults.scheduleStartTime}`
+                      : "Use the scheduled class start time when possible."}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
               />
               <FormField
                 control={form.control}
@@ -186,11 +216,16 @@ export function SessionForm({
                   <FormItem>
                     <FormLabel>End Time *</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" disabled={isLoading} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                    <Input type="datetime-local" disabled={isLoading} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {classDefaults?.scheduleEndTime
+                      ? `Class default end time: ${classDefaults.scheduleEndTime}`
+                      : "Set when this session should finish."}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
               />
             </div>
 
@@ -202,7 +237,7 @@ export function SessionForm({
                   <FormLabel>Meeting Platform</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
                     disabled={isLoading}
                   >
                     <FormControl>
@@ -238,13 +273,28 @@ export function SessionForm({
                       />
                     </FormControl>
                     <FormDescription>
-                      Teachers and students will use this link to join the session
+                      Teachers and students will use this link to join the session.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             )}
+
+            <div className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Class Defaults</p>
+              <p className="mt-1">
+                Late rule:{" "}
+                {formatLateThresholdLabel(classDefaults?.lateThresholdMinutes ?? 5)}
+              </p>
+              <p className="mt-1">
+                Default meeting setup:{" "}
+                {getMeetingPlatformLabel(classDefaults?.defaultMeetingPlatform)}
+                {classDefaults?.defaultMeetingLink
+                  ? ` - ${classDefaults.defaultMeetingLink}`
+                  : ""}
+              </p>
+            </div>
           </CardContent>
         </Card>
 

@@ -8,7 +8,6 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Loader2 } from "lucide-react"
 
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -90,7 +89,20 @@ export function LoginForm() {
       }
 
       if (result?.ok) {
-        router.push(callbackUrl)
+        let destination = callbackUrl
+
+        if (result.url) {
+          const resolvedUrl = new URL(result.url, window.location.origin)
+
+          if (resolvedUrl.origin !== window.location.origin) {
+            window.location.assign(result.url)
+            return
+          }
+
+          destination = `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`
+        }
+
+        router.replace(destination)
         router.refresh()
       }
     } catch (err) {

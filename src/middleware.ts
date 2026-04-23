@@ -1,20 +1,6 @@
 import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
-
-function getRoleRedirectPath(role: string | undefined) {
-  switch (role) {
-    case "admin":
-      return "/admin"
-    case "teacher":
-      return "/teacher"
-    case "student":
-      return "/student"
-    case "parent":
-      return "/parent"
-    default:
-      return "/"
-  }
-}
+import { getRoleRedirectPath } from "@/lib/role-redirect"
 
 export default withAuth(
   function middleware(req) {

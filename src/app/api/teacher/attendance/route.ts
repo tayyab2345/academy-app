@@ -107,6 +107,8 @@ export async function POST(req: NextRequest) {
             data: buildTeacherManualAttendanceSession({
               classId: validated.data.classId,
               dateInput,
+              scheduleStartTime: access.classInfo.scheduleStartTime,
+              scheduleEndTime: access.classInfo.scheduleEndTime,
             }),
             select: {
               id: true,

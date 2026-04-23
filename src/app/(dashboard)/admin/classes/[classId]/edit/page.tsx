@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import {
   getAdminCourseOptions,
+  getAdminStudentAssignmentOptions,
   getAdminTeacherAssignmentOptions,
 } from "@/lib/admin/admin-lists-data"
 import { prisma } from "@/lib/prisma"
@@ -43,6 +44,14 @@ async function fetchClass(classId: string) {
         },
         orderBy: {
           role: "asc",
+        },
+      },
+      enrollments: {
+        where: {
+          status: "active",
+        },
+        select: {
+          studentProfileId: true,
         },
       },
     },
@@ -84,11 +93,15 @@ export default async function EditClassPage({
     classData.teachers[0] ||
     null
 
-  const [courses, teacherOptions] = await Promise.all([
+  const [courses, teacherOptions, studentOptions] = await Promise.all([
     getAdminCourseOptions(session.user.academyId, true),
     getAdminTeacherAssignmentOptions(
       session.user.academyId,
       primaryTeacherAssignment ? [primaryTeacherAssignment.teacherProfileId] : []
+    ),
+    getAdminStudentAssignmentOptions(
+      session.user.academyId,
+      classData.enrollments.map((enrollment) => enrollment.studentProfileId)
     ),
   ])
 
@@ -104,6 +117,12 @@ export default async function EditClassPage({
     scheduleDays: classData.scheduleDays,
     scheduleStartTime: classData.scheduleStartTime || "",
     scheduleEndTime: classData.scheduleEndTime || "",
+    defaultMeetingPlatform: classData.defaultMeetingPlatform,
+    defaultMeetingLink: classData.defaultMeetingLink || "",
+    lateThresholdMinutes: classData.lateThresholdMinutes,
+    studentProfileIds: classData.enrollments.map(
+      (enrollment) => enrollment.studentProfileId
+    ),
     status: classData.status,
   }
 
@@ -128,6 +147,7 @@ export default async function EditClassPage({
         isEditing
         courses={courses}
         teacherOptions={teacherOptions}
+        studentOptions={studentOptions}
       />
     </div>
   )

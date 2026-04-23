@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useSession } from "next-auth/react"
+import type { Session } from "next-auth"
 import {
   LayoutDashboard,
   Users,
@@ -262,19 +262,19 @@ const navigation: NavItem[] = [
 ]
 
 interface AppSidebarProps {
+  currentUser: Session["user"]
   className?: string
 }
 
-export function AppSidebar({ className }: AppSidebarProps) {
+export function AppSidebar({ currentUser, className }: AppSidebarProps) {
   const pathname = usePathname()
-  const { data: session } = useSession()
-  const userRole = session?.user?.role
-  const academyName = session?.user.academy?.name?.trim() || "AcademyFlow"
+  const userRole = currentUser.role
+  const academyName = currentUser.academy?.name?.trim() || "AcademyFlow"
   const homeHref = userRole ? `/${userRole}` : "/"
   const portalLabel = userRole ? `${userRole} Portal` : "Academy Portal"
 
   const filteredNavigation = navigation.filter(
-    (item) => userRole && item.roles.includes(userRole)
+    (item) => item.roles.includes(userRole)
   )
 
   return (
@@ -282,9 +282,9 @@ export function AppSidebar({ className }: AppSidebarProps) {
       <div className="flex h-16 items-center border-b px-4">
         <Link href={homeHref} className="flex items-center gap-2">
           <AcademyLogo
-            name={session?.user.academy?.name}
-            logoUrl={session?.user.academy?.logoUrl}
-            primaryColor={session?.user.academy?.primaryColor}
+            name={currentUser.academy?.name}
+            logoUrl={currentUser.academy?.logoUrl}
+            primaryColor={currentUser.academy?.primaryColor}
           />
           <div className="flex flex-col">
             <span className="line-clamp-1 text-sm font-semibold leading-tight">
@@ -313,10 +313,10 @@ export function AppSidebar({ className }: AppSidebarProps) {
                   style={
                     isActive
                       ? {
-                          backgroundColor: session?.user.academy?.primaryColor
-                            ? `${session.user.academy.primaryColor}15`
+                          backgroundColor: currentUser.academy?.primaryColor
+                            ? `${currentUser.academy.primaryColor}15`
                             : undefined,
-                          color: session?.user.academy?.primaryColor || undefined,
+                          color: currentUser.academy?.primaryColor || undefined,
                         }
                       : undefined
                   }

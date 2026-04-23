@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Bell } from "lucide-react"
 import type { NotificationPageItem } from "@/lib/notifications/notification-data"
@@ -50,7 +51,18 @@ export function NotificationsPageContent({
   showUnreadOnly,
 }: NotificationsPageContentProps) {
   const router = useRouter()
+  const [viewState, setViewState] = useState(() => ({
+    items: notifications,
+    unreadCount,
+  }))
   const typeFilter = appliedTypeFilter || "all"
+
+  useEffect(() => {
+    setViewState({
+      items: notifications,
+      unreadCount,
+    })
+  }, [notifications, unreadCount])
 
   const buildParams = (overrides?: Partial<Record<"type" | "unread", string>>) => {
     const params = new URLSearchParams()
@@ -78,6 +90,46 @@ export function NotificationsPageContent({
     router.push(`/notifications?${params.toString()}`)
   }
 
+  const handleNotificationRead = (id: string) => {
+    setViewState((current) => {
+      let didUpdate = false
+      const items = current.items.map((notification) => {
+        if (notification.id !== id || notification.isRead) {
+          return notification
+        }
+
+        didUpdate = true
+        return {
+          ...notification,
+          isRead: true,
+        }
+      })
+
+      if (!didUpdate) {
+        return current
+      }
+
+      return {
+        items,
+        unreadCount: Math.max(0, current.unreadCount - 1),
+      }
+    })
+  }
+
+  const handleMarkAllAsRead = () => {
+    setViewState((current) => ({
+      items: current.items.map((notification) =>
+        notification.isRead
+          ? notification
+          : {
+              ...notification,
+              isRead: true,
+            }
+      ),
+      unreadCount: 0,
+    }))
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
@@ -94,7 +146,7 @@ export function NotificationsPageContent({
             All Notifications
           </CardTitle>
           <CardDescription>
-            {unreadCount} unread notification{unreadCount !== 1 ? "s" : ""}
+            {viewState.unreadCount} unread notification{viewState.unreadCount !== 1 ? "s" : ""}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -131,13 +183,14 @@ export function NotificationsPageContent({
           </div>
 
           <NotificationsList
-            notifications={notifications}
+            notifications={viewState.items}
             total={total}
             page={page}
             totalPages={Math.ceil(total / limit)}
             limit={limit}
             onPageChange={handlePageChange}
-            onNotificationRead={() => undefined}
+            onNotificationRead={handleNotificationRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
           />
         </CardContent>
       </Card>

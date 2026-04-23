@@ -74,12 +74,14 @@ export function JoinSessionButton({
         throw new Error(data.error || "Failed to join session")
       }
 
+      const resolvedMeetingPlatform = data.meetingPlatform || meetingPlatform
+
       setJoinRecord({
         joinTime: data.attendance?.joinTime || new Date().toISOString(),
         lateMinutes: data.attendance?.lateMinutes ?? data.joinTracking?.lateMinutes ?? 0,
       })
 
-      if (data.meetingLink && meetingPlatform !== "in_person") {
+      if (data.meetingLink && resolvedMeetingPlatform !== "in_person") {
         window.open(data.meetingLink, "_blank", "noopener,noreferrer")
       }
 

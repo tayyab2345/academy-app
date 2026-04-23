@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { getEffectiveSessionMeetingSettings } from "@/lib/attendance-utils"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 
@@ -23,6 +24,9 @@ async function verifySessionAccess(sessionId: string, userId: string, role: stri
       class: {
         select: {
           academyId: true,
+          defaultMeetingLink: true,
+          defaultMeetingPlatform: true,
+          lateThresholdMinutes: true,
           course: {
             select: {
               code: true,
@@ -161,10 +165,36 @@ export async function PATCH(
       (updateData.startTime as Date | undefined) ?? access.classSession.startTime
     const endTime =
       (updateData.endTime as Date | undefined) ?? access.classSession.endTime
+    const requestedMeetingPlatform =
+      (updateData.meetingPlatform as string | undefined) ??
+      access.classSession.meetingPlatform
+    const requestedMeetingLink =
+      (updateData.meetingLink as string | null | undefined) ??
+      access.classSession.meetingLink
 
     if (endTime.getTime() <= startTime.getTime()) {
       return NextResponse.json(
         { error: "End time must be after start time" },
+        { status: 400 }
+      )
+    }
+
+    const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
+      sessionMeetingPlatform: requestedMeetingPlatform,
+      sessionMeetingLink: requestedMeetingLink,
+      classMeetingPlatform: access.classSession.class.defaultMeetingPlatform,
+      classMeetingLink: access.classSession.class.defaultMeetingLink,
+    })
+
+    if (
+      effectiveMeetingSettings.platform !== "in_person" &&
+      !effectiveMeetingSettings.link
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Add a session meeting link or match the class default online platform before saving.",
+        },
         { status: 400 }
       )
     }

@@ -78,6 +78,8 @@ export function TeacherJoinSessionCard({
         throw new Error(data.error || "Failed to join class")
       }
 
+      const resolvedMeetingPlatform = data.meetingPlatform || meetingPlatform
+
       const nextJoin = data.teacherJoin
         ? {
             joinTime: new Date(data.teacherJoin.joinTime).toISOString(),
@@ -88,7 +90,7 @@ export function TeacherJoinSessionCard({
 
       setTeacherJoin(nextJoin)
 
-      if (data.meetingLink && meetingPlatform !== "in_person") {
+      if (data.meetingLink && resolvedMeetingPlatform !== "in_person") {
         openMeeting(data.meetingLink)
       }
 

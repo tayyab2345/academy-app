@@ -3,6 +3,10 @@ import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import {
+  buildDateTimeFromDateInputAndTime,
+  formatClassScheduleTime,
+} from "@/lib/class-schedule"
 import { prisma } from "@/lib/prisma"
 import { ArrowLeft } from "lucide-react"
 
@@ -104,6 +108,29 @@ export default async function NewSessionPage({
     notFound()
   }
 
+  const todayDateInput = new Date().toISOString().slice(0, 10)
+  const defaultStartDateTime = buildDateTimeFromDateInputAndTime(
+    todayDateInput,
+    classData.scheduleStartTime,
+    9,
+    0
+  )
+  const defaultEndDateTime = classData.scheduleEndTime
+    ? buildDateTimeFromDateInputAndTime(
+        todayDateInput,
+        classData.scheduleEndTime,
+        defaultStartDateTime.getHours() + 1,
+        defaultStartDateTime.getMinutes()
+      )
+    : new Date(defaultStartDateTime.getTime() + 60 * 60 * 1000)
+  const initialData = {
+    sessionDate: defaultStartDateTime.toISOString(),
+    startTime: defaultStartDateTime.toISOString(),
+    endTime: defaultEndDateTime.toISOString(),
+    meetingPlatform: classData.defaultMeetingPlatform,
+    meetingLink: classData.defaultMeetingLink || "",
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -120,7 +147,17 @@ export default async function NewSessionPage({
         </div>
       </div>
 
-      <SessionForm classId={params.classId} />
+      <SessionForm
+        classId={params.classId}
+        initialData={initialData}
+        classDefaults={{
+          scheduleStartTime: formatClassScheduleTime(classData.scheduleStartTime),
+          scheduleEndTime: formatClassScheduleTime(classData.scheduleEndTime),
+          defaultMeetingPlatform: classData.defaultMeetingPlatform,
+          defaultMeetingLink: classData.defaultMeetingLink,
+          lateThresholdMinutes: classData.lateThresholdMinutes,
+        }}
+      />
     </div>
   )
 }

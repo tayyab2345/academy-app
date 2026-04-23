@@ -21,6 +21,8 @@ export type AttendanceRecordListItem = {
   status: TeacherAttendanceStatus
   date: string
   markedAt: string
+  joinTime?: string | null
+  lateMinutes?: number | null
   sessionTitle: string | null
   class: {
     id: string
@@ -68,6 +70,8 @@ export type AttendanceStudentRow = {
     status: TeacherAttendanceStatus
     notes: string | null
     markedAt: string
+    joinTime: string | null
+    lateMinutes: number | null
     markedByTeacher: {
       user: {
         firstName: string
@@ -77,12 +81,25 @@ export type AttendanceStudentRow = {
   } | null
 }
 
+export type AttendanceTeacherJoinRow = {
+  id: string
+  joinTime: string
+  status: "on_time" | "late"
+  lateMinutes: number
+  teacher: {
+    firstName: string
+    lastName: string
+    email: string
+  }
+}
+
 export type AdminAttendancePageData = {
   classOptions: Array<{
     id: string
     name: string
     section: string | null
     status: string
+    lateThresholdMinutes: number
     course: {
       code: string
       name: string
@@ -95,6 +112,7 @@ export type AdminAttendancePageData = {
     name: string
     section: string | null
     status: string
+    lateThresholdMinutes: number
     course: {
       code: string
       name: string
@@ -109,6 +127,7 @@ export type AdminAttendancePageData = {
     endTime: string
   } | null
   students: AttendanceStudentRow[]
+  teacherJoins: AttendanceTeacherJoinRow[]
   summary: AttendanceSummaryCounts
   history: AttendanceHistoryListItem[]
 }
@@ -238,6 +257,7 @@ async function getAdminAttendanceClassOptions(academyId: string) {
       name: true,
       section: true,
       status: true,
+      lateThresholdMinutes: true,
       course: {
         select: {
           code: true,
@@ -280,6 +300,7 @@ export async function getAdminAttendancePageData(input: {
       classInfo: null,
       attendanceSession: null,
       students: [],
+      teacherJoins: [],
       summary: createEmptySummary(),
       history: [],
     }
@@ -387,30 +408,59 @@ export async function getAdminAttendancePageData(input: {
     daySessions as AttendanceDaySessionCandidate[]
   )
 
-  const attendanceRecords = attendanceSession
-    ? await prisma.attendance.findMany({
-        where: {
-          classSessionId: attendanceSession.id,
-        },
-        select: {
-          id: true,
-          studentProfileId: true,
-          status: true,
-          notes: true,
-          markedAt: true,
-          markedByTeacher: {
-            select: {
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true,
+  const [attendanceRecords, teacherJoins] = attendanceSession
+    ? await Promise.all([
+        prisma.attendance.findMany({
+          where: {
+            classSessionId: attendanceSession.id,
+          },
+          select: {
+            id: true,
+            studentProfileId: true,
+            status: true,
+            notes: true,
+            joinTime: true,
+            lateMinutes: true,
+            markedAt: true,
+            markedByTeacher: {
+              select: {
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  },
                 },
               },
             },
           },
-        },
-      })
-    : []
+        }),
+        prisma.teacherSessionJoin.findMany({
+          where: {
+            classSessionId: attendanceSession.id,
+          },
+          select: {
+            id: true,
+            joinTime: true,
+            status: true,
+            lateMinutes: true,
+            teacherProfile: {
+              select: {
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            joinTime: "asc",
+          },
+        }),
+      ])
+    : [[], []]
 
   const attendanceMap = new Map(
     attendanceRecords.map((record) => [record.studentProfileId, record])
@@ -427,6 +477,8 @@ export async function getAdminAttendancePageData(input: {
             status: attendance.status,
             notes: attendance.notes,
             markedAt: attendance.markedAt.toISOString(),
+            joinTime: attendance.joinTime?.toISOString() || null,
+            lateMinutes: attendance.lateMinutes,
             markedByTeacher: attendance.markedByTeacher,
           }
         : null,
@@ -449,6 +501,13 @@ export async function getAdminAttendancePageData(input: {
         }
       : null,
     students,
+    teacherJoins: teacherJoins.map((teacherJoin) => ({
+      id: teacherJoin.id,
+      joinTime: teacherJoin.joinTime.toISOString(),
+      status: teacherJoin.status,
+      lateMinutes: teacherJoin.lateMinutes,
+      teacher: teacherJoin.teacherProfile.user,
+    })),
     summary: buildAttendanceSummaryFromStudents(students),
     history: mapHistorySessions(historySessions),
   }
@@ -576,6 +635,8 @@ export async function getStudentAttendancePageData(
       status: record.status,
       date: record.classSession.sessionDate.toISOString(),
       markedAt: record.markedAt.toISOString(),
+      joinTime: null,
+      lateMinutes: null,
       sessionTitle: record.classSession.title,
       class: {
         id: record.classSession.class.id,
@@ -778,6 +839,8 @@ export async function getParentAttendancePageData(input: {
       status: record.status,
       date: record.classSession.sessionDate.toISOString(),
       markedAt: record.markedAt.toISOString(),
+      joinTime: null,
+      lateMinutes: null,
       sessionTitle: record.classSession.title,
       class: {
         id: record.classSession.class.id,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { syncClassEnrollmentAssignments } from "@/lib/class-enrollment"
 import { syncPrimaryTeacherAssignment } from "@/lib/class-teacher-assignment"
 import { prisma } from "@/lib/prisma"
 import { CLASS_WEEKDAY_VALUES } from "@/lib/class-schedule"
@@ -29,6 +30,12 @@ const updateClassSchema = z
     scheduleDays: z.array(z.enum(CLASS_WEEKDAY_VALUES)).optional(),
     scheduleStartTime: z.string().optional().nullable(),
     scheduleEndTime: z.string().optional().nullable(),
+    defaultMeetingPlatform: z
+      .enum(["zoom", "google_meet", "teams", "in_person"])
+      .optional(),
+    defaultMeetingLink: z.string().url().optional().nullable().or(z.literal("")),
+    lateThresholdMinutes: z.coerce.number().int().min(0).max(120).optional(),
+    studentProfileIds: z.array(z.string()).optional(),
     teacherProfileId: teacherProfileIdSchema,
   })
   .superRefine((data, ctx) => {
@@ -100,10 +107,46 @@ const updateClassSchema = z
         path: ["scheduleEndTime"],
       })
     }
+
+    const defaultMeetingPlatform = data.defaultMeetingPlatform ?? "in_person"
+    const defaultMeetingLink =
+      data.defaultMeetingLink === null ? "" : data.defaultMeetingLink || ""
+
+    if (
+      data.defaultMeetingPlatform !== undefined &&
+      defaultMeetingPlatform !== "in_person" &&
+      !defaultMeetingLink
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Meeting link is required for online classes",
+        path: ["defaultMeetingLink"],
+      })
+    }
   })
 
+function mapClassUpdateError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return null
+  }
+
+  if (error.message === "Teacher not found") {
+    return NextResponse.json({ error: error.message }, { status: 404 })
+  }
+
+  if (
+    error.message === "Only active teachers can be assigned to a class" ||
+    error.message ===
+      "One or more selected students could not be assigned. Check academy ownership, grade level, and active status."
+  ) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
+  return null
+}
+
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { classId: string } }
 ) {
   try {
@@ -132,6 +175,13 @@ export async function GET(
             startTime: true,
             endTime: true,
             status: true,
+            meetingPlatform: true,
+            meetingLink: true,
+            _count: {
+              select: {
+                attendances: true,
+              },
+            },
           },
           orderBy: {
             startTime: "asc",
@@ -186,6 +236,15 @@ export async function PATCH(
 
     const existingClass = await prisma.class.findUnique({
       where: { id: params.classId },
+      select: {
+        id: true,
+        academyId: true,
+        courseId: true,
+        startDate: true,
+        endDate: true,
+        defaultMeetingPlatform: true,
+        defaultMeetingLink: true,
+      },
     })
 
     if (!existingClass || existingClass.academyId !== session.user.academyId) {
@@ -212,6 +271,20 @@ export async function PATCH(
     if (endDate.getTime() < startDate.getTime()) {
       return NextResponse.json(
         { error: "End date must be on or after the start date" },
+        { status: 400 }
+      )
+    }
+
+    const resolvedMeetingPlatform =
+      validated.data.defaultMeetingPlatform ?? existingClass.defaultMeetingPlatform
+    const resolvedMeetingLink =
+      validated.data.defaultMeetingLink === undefined
+        ? existingClass.defaultMeetingLink
+        : validated.data.defaultMeetingLink || null
+
+    if (resolvedMeetingPlatform !== "in_person" && !resolvedMeetingLink) {
+      return NextResponse.json(
+        { error: "Meeting link is required for online classes" },
         { status: 400 }
       )
     }
@@ -248,6 +321,12 @@ export async function PATCH(
             validated.data.scheduleEndTime !== undefined
               ? "weekly"
               : undefined,
+          defaultMeetingPlatform: validated.data.defaultMeetingPlatform,
+          defaultMeetingLink:
+            validated.data.defaultMeetingLink === undefined
+              ? undefined
+              : validated.data.defaultMeetingLink || null,
+          lateThresholdMinutes: validated.data.lateThresholdMinutes,
         },
       })
 
@@ -257,6 +336,31 @@ export async function PATCH(
           academyId: session.user.academyId,
           classId: params.classId,
           teacherProfileId: validated.data.teacherProfileId,
+        })
+      }
+
+      if (validated.data.studentProfileIds !== undefined) {
+        const classWithCourse = await tx.class.findUnique({
+          where: { id: params.classId },
+          select: {
+            course: {
+              select: {
+                gradeLevel: true,
+              },
+            },
+          },
+        })
+
+        if (!classWithCourse) {
+          throw new Error("Class not found")
+        }
+
+        await syncClassEnrollmentAssignments({
+          tx,
+          academyId: session.user.academyId,
+          classId: params.classId,
+          gradeLevel: classWithCourse.course.gradeLevel,
+          studentProfileIds: validated.data.studentProfileIds,
         })
       }
     })
@@ -287,15 +391,9 @@ export async function PATCH(
   } catch (error) {
     console.error("Failed to update class:", error)
 
-    if (
-      error instanceof Error &&
-      (error.message === "Teacher not found" ||
-        error.message === "Only active teachers can be assigned to a class")
-    ) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.message === "Teacher not found" ? 404 : 400 }
-      )
+    const mappedError = mapClassUpdateError(error)
+    if (mappedError) {
+      return mappedError
     }
 
     return NextResponse.json(
@@ -306,7 +404,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { classId: string } }
 ) {
   try {
@@ -318,6 +416,10 @@ export async function DELETE(
 
     const classData = await prisma.class.findUnique({
       where: { id: params.classId },
+      select: {
+        id: true,
+        academyId: true,
+      },
     })
 
     if (!classData || classData.academyId !== session.user.academyId) {

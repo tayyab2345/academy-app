@@ -19,7 +19,10 @@ export default async function DashboardLayout({
 
   return (
     <Providers session={activeSession}>
-      <DashboardShell unreadNotificationCount={unreadNotificationCount}>
+      <DashboardShell
+        currentUser={activeSession.user}
+        unreadNotificationCount={unreadNotificationCount}
+      >
         {children}
       </DashboardShell>
     </Providers>

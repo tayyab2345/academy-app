@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Bell, CheckCheck, Loader2 } from "lucide-react"
 import {
   Popover,
@@ -37,7 +36,6 @@ interface NotificationsPanelProps {
 export function NotificationsPanel({
   initialUnreadCount,
 }: NotificationsPanelProps) {
-  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
@@ -74,24 +72,63 @@ export function NotificationsPanel({
   }
 
   useEffect(() => {
-    const syncNotifications = () => {
-      if (open) {
-        void fetchNotifications()
-      } else {
-        void fetchUnreadCount()
-      }
+    if (typeof window === "undefined") {
+      return
     }
- 
-    if (open) {
+
+    const syncUnreadBadge = () => {
+      if (document.visibilityState !== "visible") {
+        return
+      }
+
+      void fetchUnreadCount()
+    }
+
+    if (!open) {
+      syncUnreadBadge()
+    }
+
+    const intervalId = open ? null : window.setInterval(syncUnreadBadge, 60000)
+
+    window.addEventListener("focus", syncUnreadBadge)
+    window.addEventListener("notifications-updated", syncUnreadBadge)
+    document.addEventListener("visibilitychange", syncUnreadBadge)
+
+    return () => {
+      if (intervalId) {
+        window.clearInterval(intervalId)
+      }
+      window.removeEventListener("focus", syncUnreadBadge)
+      window.removeEventListener("notifications-updated", syncUnreadBadge)
+      document.removeEventListener("visibilitychange", syncUnreadBadge)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") {
+      return
+    }
+
+    const syncOpenPanel = () => {
+      if (document.visibilityState !== "visible") {
+        return
+      }
+
       void fetchNotifications()
     }
 
-    const intervalId = window.setInterval(syncNotifications, 30000)
-    window.addEventListener("notifications-updated", syncNotifications)
+    syncOpenPanel()
+
+    const intervalId = window.setInterval(syncOpenPanel, 60000)
+    window.addEventListener("focus", syncOpenPanel)
+    window.addEventListener("notifications-updated", syncOpenPanel)
+    document.addEventListener("visibilitychange", syncOpenPanel)
 
     return () => {
       window.clearInterval(intervalId)
-      window.removeEventListener("notifications-updated", syncNotifications)
+      window.removeEventListener("focus", syncOpenPanel)
+      window.removeEventListener("notifications-updated", syncOpenPanel)
+      document.removeEventListener("visibilitychange", syncOpenPanel)
     }
   }, [open])
 
@@ -114,7 +151,6 @@ export function NotificationsPanel({
       )
       setUnreadCount((current) => Math.max(0, current - 1))
       emitNotificationsUpdated()
-      router.refresh()
     } catch (error) {
       console.error("Failed to mark as read:", error)
     }
@@ -140,7 +176,6 @@ export function NotificationsPanel({
       )
       setUnreadCount(0)
       emitNotificationsUpdated()
-      router.refresh()
     } catch (error) {
       console.error("Failed to mark all as read:", error)
     } finally {

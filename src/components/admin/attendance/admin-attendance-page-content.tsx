@@ -2,9 +2,20 @@
 
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { CalendarDays, ClipboardCheck, History, Users } from "lucide-react"
+import {
+  CalendarDays,
+  ClipboardCheck,
+  History,
+  Timer,
+  Users,
+} from "lucide-react"
 import type { AdminAttendancePageData } from "@/lib/attendance/attendance-portal-data"
-import { getAttendanceStatusBadge, getSessionStatusBadge } from "@/lib/attendance-utils"
+import {
+  formatLateThresholdLabel,
+  getAttendanceStatusBadge,
+  getSessionJoinStatusBadge,
+  getSessionStatusBadge,
+} from "@/lib/attendance-utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -41,6 +52,7 @@ export function AdminAttendancePageContent({
   classInfo,
   attendanceSession,
   students,
+  teacherJoins,
   summary,
   history,
 }: AdminAttendancePageContentProps) {
@@ -149,6 +161,9 @@ export function AdminAttendancePageContent({
                   <p className="text-sm text-muted-foreground">
                     {classInfo.course.code} - {classInfo.course.name}
                   </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {formatLateThresholdLabel(classInfo.lateThresholdMinutes)}
+                  </p>
                 </div>
                 <Badge variant={classInfo.status === "active" ? "success" : "secondary"}>
                   {classInfo.status}
@@ -211,6 +226,8 @@ export function AdminAttendancePageContent({
                       <TableHead>Student</TableHead>
                       <TableHead>Student ID</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Joined At</TableHead>
+                      <TableHead>Late Minutes</TableHead>
                       <TableHead>Marked At</TableHead>
                       <TableHead>Marked By</TableHead>
                     </TableRow>
@@ -240,6 +257,14 @@ export function AdminAttendancePageContent({
                             )}
                           </TableCell>
                           <TableCell>
+                            {student.attendance?.joinTime
+                              ? new Date(student.attendance.joinTime).toLocaleString()
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {student.attendance?.lateMinutes ?? "-"}
+                          </TableCell>
+                          <TableCell>
                             {student.attendance
                               ? new Date(student.attendance.markedAt).toLocaleString()
                               : "-"}
@@ -259,81 +284,133 @@ export function AdminAttendancePageContent({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <History className="h-5 w-5" />
-              Recent Attendance History
-            </CardTitle>
-            <CardDescription>
-              Recent attendance dates recorded for this class
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {history.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                No attendance history has been recorded for this class yet.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {history.map((historyItem) => {
-                  const statusBadge = getSessionStatusBadge(historyItem.status)
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Timer className="h-5 w-5" />
+                Teacher Join Tracking
+              </CardTitle>
+              <CardDescription>
+                Review when assigned teachers joined this session
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {teacherJoins.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  No teacher join records are available for this session yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {teacherJoins.map((teacherJoin) => {
+                    const joinBadge = getSessionJoinStatusBadge(teacherJoin.status)
 
-                  return (
-                    <button
-                      key={historyItem.id}
-                      type="button"
-                      onClick={() =>
-                        navigateWithParams(
-                          selectedClassId,
-                          historyItem.sessionDate.slice(0, 10)
-                        )
-                      }
-                      className="w-full rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-medium">
-                            {new Date(historyItem.sessionDate).toLocaleDateString()}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {historyItem.title || "Session attendance"}
-                          </p>
-                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            <span>
-                              Present {historyItem.summary.present}
-                            </span>
-                            <span>
-                              Late {historyItem.summary.late}
-                            </span>
-                            <span>
-                              Absent {historyItem.summary.absent}
-                            </span>
-                            <span>
-                              Excused {historyItem.summary.excused}
-                            </span>
+                    return (
+                      <div
+                        key={teacherJoin.id}
+                        className="rounded-lg border p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium">
+                              {teacherJoin.teacher.firstName}{" "}
+                              {teacherJoin.teacher.lastName}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {teacherJoin.teacher.email}
+                            </p>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <Badge variant={statusBadge.variant as any}>
-                            {statusBadge.label}
+                          <Badge variant={joinBadge.variant as any}>
+                            {joinBadge.label}
                           </Badge>
-                          <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-                            <CalendarDays className="h-3 w-3" />
-                            {new Date(historyItem.startTime).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </div>
+                        </div>
+                        <div className="mt-3 text-sm text-muted-foreground">
+                          <p>
+                            Joined at{" "}
+                            {new Date(teacherJoin.joinTime).toLocaleString()}
+                          </p>
+                          <p>
+                            {teacherJoin.lateMinutes > 0
+                              ? `${teacherJoin.lateMinutes} minute${teacherJoin.lateMinutes === 1 ? "" : "s"} late`
+                              : "Joined on time"}
+                          </p>
                         </div>
                       </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Recent Attendance History
+              </CardTitle>
+              <CardDescription>
+                Recent attendance dates recorded for this class
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {history.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  No attendance history has been recorded for this class yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {history.map((historyItem) => {
+                    const statusBadge = getSessionStatusBadge(historyItem.status)
+
+                    return (
+                      <button
+                        key={historyItem.id}
+                        type="button"
+                        onClick={() =>
+                          navigateWithParams(
+                            selectedClassId,
+                            historyItem.sessionDate.slice(0, 10)
+                          )
+                        }
+                        className="w-full rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium">
+                              {new Date(historyItem.sessionDate).toLocaleDateString()}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {historyItem.title || "Session attendance"}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              <span>Present {historyItem.summary.present}</span>
+                              <span>Late {historyItem.summary.late}</span>
+                              <span>Absent {historyItem.summary.absent}</span>
+                              <span>Excused {historyItem.summary.excused}</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant={statusBadge.variant as any}>
+                              {statusBadge.label}
+                            </Badge>
+                            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                              <CalendarDays className="h-3 w-3" />
+                              {new Date(historyItem.startTime).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

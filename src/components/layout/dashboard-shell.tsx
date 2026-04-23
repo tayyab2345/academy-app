@@ -1,14 +1,17 @@
 "use client"
 
 import { useState } from "react"
+import type { Session } from "next-auth"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { AppHeader } from "@/components/layout/app-header"
 
 export function DashboardShell({
   children,
+  currentUser,
   unreadNotificationCount,
 }: {
   children: React.ReactNode
+  currentUser: Session["user"]
   unreadNotificationCount: number
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -16,7 +19,7 @@ export function DashboardShell({
   return (
     <div className="flex h-screen overflow-hidden">
       <aside className="hidden md:block md:w-64 lg:w-72">
-        <AppSidebar />
+        <AppSidebar currentUser={currentUser} />
       </aside>
 
       {sidebarOpen && (
@@ -26,13 +29,14 @@ export function DashboardShell({
             onClick={() => setSidebarOpen(false)}
           />
           <aside className="fixed inset-y-0 left-0 z-50 w-64 md:hidden">
-            <AppSidebar />
+            <AppSidebar currentUser={currentUser} />
           </aside>
         </>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader
+          currentUser={currentUser}
           showMobileMenu
           unreadNotificationCount={unreadNotificationCount}
           onMenuClick={() => setSidebarOpen(true)}
