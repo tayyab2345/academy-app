@@ -38,7 +38,25 @@ export async function requireActiveDashboardSession(session: Session | null) {
     redirect("/login")
   }
 
-  const academyState = await getAcademyLifecycleState(session.user.academyId)
+  const [academyState, userState] = await Promise.all([
+    getAcademyLifecycleState(session.user.academyId),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true,
+        academyId: true,
+        isActive: true,
+      },
+    }),
+  ])
+
+  if (
+    !userState ||
+    !userState.isActive ||
+    userState.academyId !== session.user.academyId
+  ) {
+    redirect("/login")
+  }
 
   if (!academyState) {
     redirect("/login")

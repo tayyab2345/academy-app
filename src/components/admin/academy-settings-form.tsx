@@ -28,6 +28,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { ImageUploadField } from "@/components/profile/image-upload-field"
 import { DeleteAcademyDialog } from "@/components/admin/delete-academy-dialog"
+import { AdminTeamPanel } from "@/components/admin/admin-team-panel"
 
 const academySettingsSchema = z.object({
   name: z.string().min(2, "Academy name must be at least 2 characters"),
@@ -61,12 +62,29 @@ interface AcademySettingsFormProps {
     classes: number
   }
   recoveryWindowDays: number
+  adminTeam: {
+    admins: Array<{
+      id: string
+      firstName: string
+      lastName: string
+      email: string
+      phone: string | null
+      adminPermissionType: "full_admin" | "limited_admin" | null
+      isActive: boolean
+      isAcademyOwner: boolean
+      createdAt: string
+    }>
+    currentUserId: string
+    canManageAdmins: boolean
+    canChangePermissionType: boolean
+  }
 }
 
 export function AcademySettingsForm({
   academy,
   deleteSummary,
   recoveryWindowDays,
+  adminTeam,
 }: AcademySettingsFormProps) {
   const { data: session, update } = useSession()
   const router = useRouter()
@@ -326,6 +344,13 @@ export function AcademySettingsForm({
           </Form>
         </CardContent>
       </Card>
+
+      <AdminTeamPanel
+        initialAdmins={adminTeam.admins}
+        currentUserId={adminTeam.currentUserId}
+        canManageAdmins={adminTeam.canManageAdmins}
+        canChangePermissionType={adminTeam.canChangePermissionType}
+      />
 
       <Card className="border-destructive/30">
         <CardHeader>

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { AcademySettingsForm } from "@/components/admin/academy-settings-form"
 import { ACADEMY_RECOVERY_WINDOW_DAYS } from "@/lib/academy-deletion"
+import { getAdminTeamAccess, getAdminTeamMembers } from "@/lib/admin/admin-team"
 
 export default async function AdminSettingsPage() {
   const session = await getServerSession(authOptions)
@@ -12,7 +13,15 @@ export default async function AdminSettingsPage() {
     redirect("/login")
   }
 
-  const [academy, teachers, students, parents, classes] = await Promise.all([
+  const [
+    academy,
+    teachers,
+    students,
+    parents,
+    classes,
+    adminTeamAccess,
+    adminTeamMembers,
+  ] = await Promise.all([
     prisma.academy.findUnique({
       where: { id: session.user.academyId },
       select: {
@@ -48,9 +57,11 @@ export default async function AdminSettingsPage() {
         academyId: session.user.academyId,
       },
     }),
+    getAdminTeamAccess(session.user.id),
+    getAdminTeamMembers(session.user.academyId),
   ])
 
-  if (!academy) {
+  if (!academy || !adminTeamAccess) {
     redirect("/admin")
   }
 
@@ -64,6 +75,12 @@ export default async function AdminSettingsPage() {
         classes,
       }}
       recoveryWindowDays={ACADEMY_RECOVERY_WINDOW_DAYS}
+      adminTeam={{
+        admins: adminTeamMembers,
+        currentUserId: session.user.id,
+        canManageAdmins: adminTeamAccess.canManageAdmins,
+        canChangePermissionType: adminTeamAccess.canChangePermissionType,
+      }}
     />
   )
 }

@@ -11,6 +11,7 @@ declare module "next-auth" {
       phone: string | null
       avatarUrl: string | null
       role: 'admin' | 'teacher' | 'student' | 'parent'
+      adminPermissionType: 'full_admin' | 'limited_admin' | null
       isAcademyOwner: boolean
       academyId: string
       academy: {
@@ -34,6 +35,7 @@ declare module "next-auth" {
     phone: string | null
     avatarUrl: string | null
     role: 'admin' | 'teacher' | 'student' | 'parent'
+    adminPermissionType: 'full_admin' | 'limited_admin' | null
     isAcademyOwner: boolean
     academyId: string
     academy: {
@@ -59,6 +61,7 @@ declare module "next-auth/jwt" {
     phone: string | null
     avatarUrl: string | null
     role: 'admin' | 'teacher' | 'student' | 'parent'
+    adminPermissionType: 'full_admin' | 'limited_admin' | null
     isAcademyOwner: boolean
     academyId: string
     academy: {

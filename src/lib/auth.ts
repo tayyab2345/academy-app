@@ -96,6 +96,7 @@ export const authOptions: NextAuthOptions = {
             phone: user.phone,
             avatarUrl: user.avatarUrl,
             role: user.role,
+            adminPermissionType: user.adminPermissionType,
             isAcademyOwner: user.isAcademyOwner,
             academyId: user.academyId,
             academy: {
@@ -142,6 +143,7 @@ export const authOptions: NextAuthOptions = {
         token.phone = user.phone
         token.avatarUrl = user.avatarUrl
         token.role = user.role
+        token.adminPermissionType = user.adminPermissionType
         token.isAcademyOwner = user.isAcademyOwner
         token.academyId = user.academyId
         token.academy = user.academy
@@ -154,6 +156,7 @@ export const authOptions: NextAuthOptions = {
         token.phone = session.user.phone
         token.avatarUrl = session.user.avatarUrl
         token.role = session.user.role
+        token.adminPermissionType = session.user.adminPermissionType
         token.isAcademyOwner = session.user.isAcademyOwner
         token.academyId = session.user.academyId
         token.academy = session.user.academy
@@ -215,6 +218,8 @@ export const authOptions: NextAuthOptions = {
         session.user.phone = (token.phone as string | null | undefined) ?? null
         session.user.avatarUrl = (token.avatarUrl as string | null | undefined) ?? null
         session.user.role = token.role as "admin" | "teacher" | "student" | "parent"
+        session.user.adminPermissionType =
+          (token.adminPermissionType as "full_admin" | "limited_admin" | null | undefined) ?? null
         session.user.isAcademyOwner = token.isAcademyOwner as boolean
         session.user.academyId = token.academyId as string
         session.user.academy = token.academy as Session["user"]["academy"]
