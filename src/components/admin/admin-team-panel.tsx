@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { CheckCircle2, Clipboard, Loader2, ShieldCheck, UserPlus } from "lucide-react"
+import { CheckCircle2, Loader2, ShieldCheck, UserPlus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -62,13 +62,23 @@ type AdminTeamPanelProps = {
   canChangePermissionType: boolean
 }
 
-const createAdminSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required"),
-  lastName: z.string().trim().min(1, "Last name is required"),
-  email: z.string().trim().email("Please enter a valid email address"),
-  phone: z.string().trim().optional(),
-  adminPermissionType: z.enum(["full_admin", "limited_admin"]),
-})
+const createAdminSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "First name is required"),
+    lastName: z.string().trim().min(1, "Last name is required"),
+    email: z.string().trim().email("Please enter a valid email address"),
+    phone: z.string().trim().optional(),
+    adminPermissionType: z.enum(["full_admin", "limited_admin"]),
+    password: z
+      .string()
+      .min(1, "Password is required")
+      .min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(1, "Confirm password is required"),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Confirm password must match password",
+    path: ["confirmPassword"],
+  })
 
 type CreateAdminValues = z.infer<typeof createAdminSchema>
 
@@ -78,6 +88,8 @@ const defaultAdminValues: CreateAdminValues = {
   email: "",
   phone: "",
   adminPermissionType: "limited_admin",
+  password: "",
+  confirmPassword: "",
 }
 
 function getAdminTypeLabel(admin: AdminTeamMember) {
@@ -141,10 +153,6 @@ export function AdminTeamPanel({
   const [updatingAdminId, setUpdatingAdminId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [temporaryPassword, setTemporaryPassword] = useState<{
-    email: string
-    password: string
-  } | null>(null)
 
   const form = useForm<CreateAdminValues>({
     resolver: zodResolver(createAdminSchema),
@@ -155,7 +163,6 @@ export function AdminTeamPanel({
     setIsCreating(true)
     setError(null)
     setSuccess(null)
-    setTemporaryPassword(null)
 
     try {
       const response = await fetch("/api/admin/admin-team", {
@@ -170,11 +177,7 @@ export function AdminTeamPanel({
       }
 
       setAdmins((current) => sortAdmins([...current, data.admin]))
-      setTemporaryPassword({
-        email: data.admin.email,
-        password: data.temporaryPassword,
-      })
-      setSuccess("New admin added successfully.")
+      setSuccess("New admin added successfully. They can sign in with the password you set.")
       setShowForm(false)
       form.reset(defaultAdminValues)
       router.refresh()
@@ -229,15 +232,6 @@ export function AdminTeamPanel({
     }
   }
 
-  async function copyTemporaryPassword() {
-    if (!temporaryPassword || typeof navigator === "undefined") {
-      return
-    }
-
-    await navigator.clipboard.writeText(temporaryPassword.password)
-    setSuccess("Temporary password copied.")
-  }
-
   return (
     <Card>
       <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -271,32 +265,6 @@ export function AdminTeamPanel({
           <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             Only the academy owner or a full admin can add or manage admin
             accounts.
-          </div>
-        ) : null}
-
-        {temporaryPassword ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold">Temporary login password</p>
-                <p className="mt-1 break-words">
-                  Share this one-time password with {temporaryPassword.email}:
-                </p>
-                <code className="mt-2 inline-block rounded bg-white px-2 py-1 font-mono text-sm">
-                  {temporaryPassword.password}
-                </code>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={copyTemporaryPassword}
-                className="bg-white"
-              >
-                <Clipboard className="mr-2 h-4 w-4" />
-                Copy
-              </Button>
-            </div>
           </div>
         ) : null}
 
@@ -400,6 +368,49 @@ export function AdminTeamPanel({
                     </FormItem>
                   )}
                 />
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="password"
+                            autoComplete="new-password"
+                            disabled={isCreating}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Minimum 8 characters. This is the admin&apos;s initial
+                          login password.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirm password</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="password"
+                            autoComplete="new-password"
+                            disabled={isCreating}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <div className="flex justify-end">
                   <Button type="submit" disabled={isCreating}>

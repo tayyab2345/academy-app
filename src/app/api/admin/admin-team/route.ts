@@ -1,4 +1,3 @@
-import { randomBytes } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import type { AdminPermissionType } from "@prisma/client"
@@ -11,17 +10,23 @@ import {
 } from "@/lib/admin/admin-team"
 import { prisma } from "@/lib/prisma"
 
-const createAdminSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required"),
-  lastName: z.string().trim().min(1, "Last name is required"),
-  email: z.string().trim().email("Please enter a valid email address"),
-  phone: z.string().trim().optional().nullable().or(z.literal("")),
-  adminPermissionType: z.enum(["full_admin", "limited_admin"]),
-})
-
-function generateTemporaryPassword() {
-  return `Af-${randomBytes(9).toString("base64url")}`
-}
+const createAdminSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "First name is required"),
+    lastName: z.string().trim().min(1, "Last name is required"),
+    email: z.string().trim().email("Please enter a valid email address"),
+    phone: z.string().trim().optional().nullable().or(z.literal("")),
+    adminPermissionType: z.enum(["full_admin", "limited_admin"]),
+    password: z
+      .string()
+      .min(1, "Password is required")
+      .min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(1, "Confirm password is required"),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Confirm password must match password",
+    path: ["confirmPassword"],
+  })
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
@@ -104,8 +109,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: message }, { status: 409 })
     }
 
-    const temporaryPassword = generateTemporaryPassword()
-    const passwordHash = await bcrypt.hash(temporaryPassword, 10)
+    const passwordHash = await bcrypt.hash(validated.data.password, 10)
 
     const admin = await prisma.user.create({
       data: {
@@ -140,7 +144,6 @@ export async function POST(req: NextRequest) {
           ...admin,
           createdAt: admin.createdAt.toISOString(),
         },
-        temporaryPassword,
       },
       { status: 201 }
     )
