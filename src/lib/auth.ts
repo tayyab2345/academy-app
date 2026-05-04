@@ -6,6 +6,7 @@ import { formatPrismaError, prisma } from "./prisma"
 import { isDemoModeEnabled, shouldSkipSubdomainCheck } from "./runtime-flags"
 
 let authDiagnosticsLogged = false
+const ACADEMY_TOKEN_REFRESH_INTERVAL_MS = 60 * 1000
 
 function logAuthDiagnostics() {
   if (authDiagnosticsLogged) {
@@ -132,6 +133,8 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, trigger, session }) {
       // Initial sign in - add user data to token
       if (user) {
+        const refreshedAt = Date.now()
+
         token.id = user.id
         token.email = user.email
         token.firstName = user.firstName
@@ -142,6 +145,7 @@ export const authOptions: NextAuthOptions = {
         token.isAcademyOwner = user.isAcademyOwner
         token.academyId = user.academyId
         token.academy = user.academy
+        token.academyRefreshedAt = refreshedAt
       }
 
       if (trigger === "update" && session?.user) {
@@ -153,9 +157,20 @@ export const authOptions: NextAuthOptions = {
         token.isAcademyOwner = session.user.isAcademyOwner
         token.academyId = session.user.academyId
         token.academy = session.user.academy
+        token.academyRefreshedAt = Date.now()
       }
 
-      if (token.academyId) {
+      const lastAcademyRefresh =
+        typeof token.academyRefreshedAt === "number"
+          ? token.academyRefreshedAt
+          : 0
+      const shouldRefreshAcademy =
+        Boolean(token.academyId) &&
+        (!token.academy ||
+          !lastAcademyRefresh ||
+          Date.now() - lastAcademyRefresh > ACADEMY_TOKEN_REFRESH_INTERVAL_MS)
+
+      if (shouldRefreshAcademy) {
         try {
           const academy = await prisma.academy.findUnique({
             where: { id: token.academyId as string },
@@ -176,6 +191,7 @@ export const authOptions: NextAuthOptions = {
               ...academy,
               deletedAt: academy.deletedAt?.toISOString() || null,
             }
+            token.academyRefreshedAt = Date.now()
           }
         } catch (error) {
           console.error("[auth/session][next-auth][jwt][academy-refresh] failed", {

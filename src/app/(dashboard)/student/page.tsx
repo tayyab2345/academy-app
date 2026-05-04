@@ -62,7 +62,12 @@ async function getStudentDashboardCoreData(userId: string) {
       })
 
       await syncRecurringSessionsForClasses(
-        activeEnrollmentClassIds.map((enrollment) => enrollment.classId)
+        activeEnrollmentClassIds.map((enrollment) => enrollment.classId),
+        {
+          // Keep student dashboard fast by syncing only the window it renders.
+          daysBack: 2,
+          daysAhead: 14,
+        }
       )
 
       const now = new Date()

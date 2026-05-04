@@ -62,7 +62,12 @@ async function getTeacherDashboardData(userId: string) {
       })
 
       await syncRecurringSessionsForClasses(
-        assignedClassIds.map((assignment) => assignment.classId)
+        assignedClassIds.map((assignment) => assignment.classId),
+        {
+          // Dashboard only needs recent/today/next sessions; full sync still runs on class detail/admin updates.
+          daysBack: 2,
+          daysAhead: 14,
+        }
       )
 
       const now = new Date()

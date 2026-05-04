@@ -165,7 +165,12 @@ export async function getTeacherClassesOverviewData(
   })
 
   await syncRecurringSessionsForClasses(
-    assignedClassIds.map((assignment) => assignment.classId)
+    assignedClassIds.map((assignment) => assignment.classId),
+    {
+      // Class overview only shows counts/next sessions, so avoid generating months of rows on list load.
+      daysBack: 2,
+      daysAhead: 14,
+    }
   )
 
   const classTeachers = await prisma.classTeacher.findMany({

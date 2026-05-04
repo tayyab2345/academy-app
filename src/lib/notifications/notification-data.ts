@@ -1,4 +1,5 @@
 import { NotificationType, Prisma } from "@prisma/client"
+import { unstable_cache } from "next/cache"
 import { prisma } from "@/lib/prisma"
 
 const notificationTypes = Object.values(NotificationType)
@@ -22,12 +23,17 @@ export type NotificationsPageData = {
 }
 
 export async function getUnreadNotificationCount(userId: string) {
-  return prisma.notification.count({
-    where: {
-      userId,
-      isRead: false,
-    },
-  })
+  return unstable_cache(
+    async () =>
+      prisma.notification.count({
+        where: {
+          userId,
+          isRead: false,
+        },
+      }),
+    ["unread-notification-count", userId],
+    { revalidate: 30 }
+  )()
 }
 
 function isNotificationType(value: string): value is NotificationType {

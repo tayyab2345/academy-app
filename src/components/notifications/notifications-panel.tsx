@@ -31,12 +31,14 @@ function emitNotificationsUpdated() {
 
 interface NotificationsPanelProps {
   initialUnreadCount: number
+  initialOpen?: boolean
 }
 
 export function NotificationsPanel({
   initialUnreadCount,
+  initialOpen = false,
 }: NotificationsPanelProps) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(initialOpen)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
   const [isLoading, setIsLoading] = useState(false)
@@ -82,10 +84,6 @@ export function NotificationsPanel({
       }
 
       void fetchUnreadCount()
-    }
-
-    if (!open) {
-      syncUnreadBadge()
     }
 
     const intervalId = open ? null : window.setInterval(syncUnreadBadge, 60000)

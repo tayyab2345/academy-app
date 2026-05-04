@@ -7,10 +7,12 @@ import {
 
 const DEFAULT_SYNC_DAYS_BACK = 14
 const DEFAULT_SYNC_DAYS_AHEAD = 60
+const DEFAULT_SYNC_CONCURRENCY = 3
 
 type SyncRecurringSessionsOptions = {
   daysBack?: number
   daysAhead?: number
+  concurrency?: number
   now?: Date
 }
 
@@ -327,8 +329,30 @@ export async function syncRecurringSessionsForClasses(
   options: SyncRecurringSessionsOptions = {}
 ) {
   const uniqueClassIds = [...new Set(classIds.filter(Boolean))]
+  const concurrency = Math.min(
+    Math.max(options.concurrency ?? DEFAULT_SYNC_CONCURRENCY, 1),
+    uniqueClassIds.length || 1
+  )
+  const results: Array<{ created: number; updated: number; deleted: number }> = []
+  let nextIndex = 0
 
-  for (const classId of uniqueClassIds) {
-    await syncRecurringSessionsForClass(classId, options)
+  async function worker() {
+    while (nextIndex < uniqueClassIds.length) {
+      const classId = uniqueClassIds[nextIndex]
+      nextIndex += 1
+
+      results.push(await syncRecurringSessionsForClass(classId, options))
+    }
   }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()))
+
+  return results.reduce(
+    (summary, result) => ({
+      created: summary.created + result.created,
+      updated: summary.updated + result.updated,
+      deleted: summary.deleted + result.deleted,
+    }),
+    { created: 0, updated: 0, deleted: 0 }
+  )
 }

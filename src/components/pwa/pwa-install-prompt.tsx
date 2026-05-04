@@ -49,11 +49,16 @@ export function PWAInstallPrompt() {
     setIsDismissed(dismissedFlag === "1")
     setIsStandalone(isStandaloneMode())
 
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js", { scope: "/" })
-        .catch((error) => console.error("Failed to register service worker:", error))
-    }
+    const serviceWorkerTimer =
+      "serviceWorker" in navigator
+        ? window.setTimeout(() => {
+            navigator.serviceWorker
+              .register("/sw.js", { scope: "/" })
+              .catch((error) =>
+                console.error("Failed to register service worker:", error)
+              )
+          }, 1500)
+        : null
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault()
@@ -70,6 +75,9 @@ export function PWAInstallPrompt() {
     window.addEventListener("appinstalled", handleAppInstalled)
 
     return () => {
+      if (serviceWorkerTimer) {
+        window.clearTimeout(serviceWorkerTimer)
+      }
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
       window.removeEventListener("appinstalled", handleAppInstalled)
     }

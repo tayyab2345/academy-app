@@ -46,6 +46,7 @@ declare module "next-auth" {
       isDeleted: boolean
       deletedAt: string | null
     }
+    academyRefreshedAt?: number
   }
 }
 
