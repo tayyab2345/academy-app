@@ -89,7 +89,7 @@ export default async function StudentAttendancePage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardHeader className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <CalendarDays className="h-5 w-5" />
@@ -106,7 +106,7 @@ export default async function StudentAttendancePage() {
           <CardContent>
             <AttendanceRecordsTable
               records={data.recentRecords}
-              emptyMessage="No attendance records are available yet."
+              emptyMessage="No attendance records found"
               showMarkedBy
             />
           </CardContent>

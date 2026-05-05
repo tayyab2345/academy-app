@@ -30,7 +30,10 @@ export type AttendanceRecordListItem = {
   date: string
   markedAt: string
   joinTime?: string | null
+  sessionStartTime?: string | null
+  sessionEndTime?: string | null
   lateMinutes?: number | null
+  notes?: string | null
   sessionTitle: string | null
   class: {
     id: string
@@ -636,6 +639,7 @@ export async function getStudentAttendancePageData(
     select: {
       id: true,
       status: true,
+      notes: true,
       joinTime: true,
       lateMinutes: true,
       markedAt: true,
@@ -643,6 +647,8 @@ export async function getStudentAttendancePageData(
         select: {
           title: true,
           sessionDate: true,
+          startTime: true,
+          endTime: true,
           class: {
             select: {
               id: true,
@@ -735,7 +741,10 @@ export async function getStudentAttendancePageData(
       date: record.classSession.sessionDate.toISOString(),
       markedAt: record.markedAt.toISOString(),
       joinTime: record.joinTime?.toISOString() || null,
+      sessionStartTime: record.classSession.startTime.toISOString(),
+      sessionEndTime: record.classSession.endTime.toISOString(),
       lateMinutes: record.lateMinutes,
+      notes: record.notes,
       sessionTitle: record.classSession.title,
       class: {
         id: record.classSession.class.id,
@@ -835,6 +844,7 @@ export async function getParentAttendancePageData(input: {
     select: {
       id: true,
       status: true,
+      notes: true,
       joinTime: true,
       lateMinutes: true,
       markedAt: true,
@@ -854,6 +864,8 @@ export async function getParentAttendancePageData(input: {
         select: {
           title: true,
           sessionDate: true,
+          startTime: true,
+          endTime: true,
           class: {
             select: {
               id: true,
@@ -944,7 +956,10 @@ export async function getParentAttendancePageData(input: {
       date: record.classSession.sessionDate.toISOString(),
       markedAt: record.markedAt.toISOString(),
       joinTime: record.joinTime?.toISOString() || null,
+      sessionStartTime: record.classSession.startTime.toISOString(),
+      sessionEndTime: record.classSession.endTime.toISOString(),
       lateMinutes: record.lateMinutes,
+      notes: record.notes,
       sessionTitle: record.classSession.title,
       class: {
         id: record.classSession.class.id,

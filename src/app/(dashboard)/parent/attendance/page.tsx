@@ -121,9 +121,12 @@ export default async function ParentAttendancePage({
             Switch between all linked children or focus on one child
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Link href="/parent/attendance">
-            <Button variant={data.selectedChildId === "" ? "default" : "outline"}>
+        <CardContent className="grid gap-3 sm:flex sm:flex-wrap">
+          <Link href="/parent/attendance" className="min-w-0">
+            <Button
+              variant={data.selectedChildId === "" ? "default" : "outline"}
+              className="w-full sm:w-auto"
+            >
               All Children
             </Button>
           </Link>
@@ -131,9 +134,11 @@ export default async function ParentAttendancePage({
             <Link
               key={child.id}
               href={`/parent/attendance?childId=${encodeURIComponent(child.id)}`}
+              className="min-w-0"
             >
               <Button
                 variant={data.selectedChildId === child.id ? "default" : "outline"}
+                className="w-full justify-start whitespace-normal text-left sm:w-auto sm:justify-center sm:whitespace-nowrap sm:text-center"
               >
                 {child.firstName} {child.lastName}
               </Button>
@@ -165,7 +170,7 @@ export default async function ParentAttendancePage({
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardHeader className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <CalendarDays className="h-5 w-5" />
@@ -183,7 +188,7 @@ export default async function ParentAttendancePage({
           <CardContent>
             <AttendanceRecordsTable
               records={data.recentRecords}
-              emptyMessage="No attendance records are available yet."
+              emptyMessage="No attendance records found"
               showStudent={data.selectedChildId === ""}
               showMarkedBy
             />
