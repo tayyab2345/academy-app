@@ -17,6 +17,12 @@ import { authOptions } from "@/lib/auth"
 import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import {
+  formatSessionDayName,
+  getJoinOpensMessage,
+  getRelevantClassSession,
+  getStartOfLocalDay,
+} from "@/lib/relevant-session"
+import {
   formatSessionDate,
   formatSessionTime,
   getEffectiveSessionMeetingSettings,
@@ -71,6 +77,7 @@ async function getTeacherDashboardData(userId: string) {
       )
 
       const now = new Date()
+      const todayStart = getStartOfLocalDay(now)
       const startOfToday = new Date(now)
       startOfToday.setHours(0, 0, 0, 0)
       const endOfToday = new Date(startOfToday)
@@ -81,7 +88,6 @@ async function getTeacherDashboardData(userId: string) {
         enrolledStudents,
         todaysClasses,
         pendingReports,
-        upcomingSessions,
         recentReports,
       ] = await Promise.all([
         prisma.classTeacher.findMany({
@@ -121,18 +127,21 @@ async function getTeacherDashboardData(userId: string) {
                 },
                 sessions: {
                   where: {
-                    endTime: { gte: now },
+                    sessionDate: {
+                      gte: todayStart,
+                    },
                     status: {
-                      in: ["scheduled", "ongoing"],
+                      in: ["scheduled", "ongoing", "completed"],
                     },
                   },
                   orderBy: {
                     startTime: "asc",
                   },
-                  take: 1,
+                  take: 7,
                   select: {
                     id: true,
                     title: true,
+                    sessionDate: true,
                     startTime: true,
                     endTime: true,
                     status: true,
@@ -202,60 +211,6 @@ async function getTeacherDashboardData(userId: string) {
             status: "draft",
           },
         }),
-        prisma.classSession.findMany({
-          where: {
-            class: {
-              status: "active",
-              teachers: {
-                some: {
-                  teacherProfileId: teacherProfile.id,
-                },
-              },
-            },
-            endTime: { gte: now },
-            status: {
-              in: ["scheduled", "ongoing"],
-            },
-          },
-          select: {
-            id: true,
-            title: true,
-            startTime: true,
-            endTime: true,
-            status: true,
-            meetingPlatform: true,
-            meetingLink: true,
-            class: {
-              select: {
-                id: true,
-                name: true,
-                defaultMeetingPlatform: true,
-                defaultMeetingLink: true,
-                course: {
-                  select: {
-                    code: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-            teacherJoins: {
-              where: {
-                teacherProfileId: teacherProfile.id,
-              },
-              select: {
-                joinTime: true,
-                status: true,
-                lateMinutes: true,
-              },
-              take: 1,
-            },
-          },
-          orderBy: {
-            startTime: "asc",
-          },
-          take: 5,
-        }),
         prisma.report.findMany({
           where: {
             teacherProfileId: teacherProfile.id,
@@ -295,6 +250,32 @@ async function getTeacherDashboardData(userId: string) {
           take: 5,
         }),
       ])
+
+      const upcomingSessions = assignedClasses
+        .flatMap((assignment) => {
+          const nextSession = getRelevantClassSession(assignment.class.sessions, now)
+
+          if (!nextSession) {
+            return []
+          }
+
+          return [
+            {
+              ...nextSession,
+              class: {
+                id: assignment.class.id,
+                name: assignment.class.name,
+                defaultMeetingPlatform: assignment.class.defaultMeetingPlatform,
+                defaultMeetingLink: assignment.class.defaultMeetingLink,
+                course: assignment.class.course,
+              },
+            },
+          ]
+        })
+        .sort(
+          (left, right) =>
+            new Date(left.startTime).getTime() - new Date(right.startTime).getTime()
+        )
 
       return {
         assignedClasses,
@@ -445,7 +426,9 @@ export default async function TeacherDashboardPage() {
             ) : (
               <div className="space-y-3">
                 {assignedClasses.slice(0, 4).map((assignment) => {
-                  const nextSession = assignment.class.sessions[0]
+                  const nextSession = getRelevantClassSession(
+                    assignment.class.sessions
+                  )
                   const joinWindow = nextSession
                     ? getSessionJoinWindowState({
                         startTime: nextSession.startTime,
@@ -498,7 +481,7 @@ export default async function TeacherDashboardPage() {
                             </p>
                             <p className="mt-2 text-xs text-muted-foreground">
                               {nextSession
-                                ? `Next session: ${formatSessionDate(new Date(nextSession.startTime))} at ${formatSessionTime(new Date(nextSession.startTime))}`
+                                ? `${formatSessionDayName(nextSession.startTime)} session: ${formatSessionDate(new Date(nextSession.startTime))} at ${formatSessionTime(new Date(nextSession.startTime))}`
                                 : "No upcoming sessions scheduled"}
                             </p>
                             {nextSession ? (
@@ -526,7 +509,7 @@ export default async function TeacherDashboardPage() {
                           </Link>
                         </div>
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-                          {nextSession && joinWindow?.isVisible && effectiveMeetingSettings ? (
+                          {nextSession && effectiveMeetingSettings ? (
                             <TeacherJoinButton
                               sessionId={nextSession.id}
                               sessionStatus={nextSession.status}
@@ -536,6 +519,18 @@ export default async function TeacherDashboardPage() {
                               align="start"
                               showMeta={false}
                               className="w-full sm:w-auto"
+                              disabledReason={
+                                joinWindow?.isVisible
+                                  ? null
+                                  : nextSession.status === "completed"
+                                    ? "Today's class session has ended."
+                                    : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                              }
+                              disabledLabel={
+                                nextSession.status === "completed"
+                                  ? "Session ended"
+                                  : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                              }
                             />
                           ) : (
                             <Link href={`/teacher/classes/${assignment.class.id}/sessions`}>
@@ -558,9 +553,9 @@ export default async function TeacherDashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <div>
-              <CardTitle>Upcoming Sessions</CardTitle>
+              <CardTitle>Today / Next Sessions</CardTitle>
               <CardDescription>
-                Your next scheduled or ongoing sessions
+                One relevant session per assigned class
               </CardDescription>
             </div>
             <Link href="/teacher/classes">
@@ -626,6 +621,7 @@ export default async function TeacherDashboardPage() {
                             {upcomingSession.class.course.code}: {upcomingSession.class.name}
                           </p>
                           <p className="mt-2 text-xs text-muted-foreground">
+                            {formatSessionDayName(upcomingSession.startTime)} -{" "}
                             {formatSessionDate(new Date(upcomingSession.startTime))} -{" "}
                             {formatSessionTime(new Date(upcomingSession.startTime))} -{" "}
                             {formatSessionTime(new Date(upcomingSession.endTime))}
@@ -644,25 +640,28 @@ export default async function TeacherDashboardPage() {
                           </Link>
                         </div>
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-                          {joinWindow.isVisible ? (
-                            <TeacherJoinButton
-                              sessionId={upcomingSession.id}
-                              sessionStatus={upcomingSession.status}
-                              meetingPlatform={effectiveMeetingSettings.platform}
-                              meetingLink={effectiveMeetingSettings.link}
-                              initialJoin={initialJoin}
-                              align="start"
-                              showMeta={false}
-                              className="w-full sm:w-auto"
-                            />
-                          ) : (
-                            <Link href={`/teacher/sessions/${upcomingSession.id}`}>
-                              <Button variant="outline" className="w-full sm:w-auto">
-                                View Session
-                                <ArrowRight className="ml-2 h-4 w-4" />
-                              </Button>
-                            </Link>
-                          )}
+                          <TeacherJoinButton
+                            sessionId={upcomingSession.id}
+                            sessionStatus={upcomingSession.status}
+                            meetingPlatform={effectiveMeetingSettings.platform}
+                            meetingLink={effectiveMeetingSettings.link}
+                            initialJoin={initialJoin}
+                            align="start"
+                            showMeta={false}
+                            className="w-full sm:w-auto"
+                            disabledReason={
+                              joinWindow.isVisible
+                                ? null
+                                : upcomingSession.status === "completed"
+                                  ? "Today's class session has ended."
+                                  : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                            }
+                            disabledLabel={
+                              upcomingSession.status === "completed"
+                                ? "Session ended"
+                                : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                            }
+                          />
                         </div>
                       </div>
                     </div>

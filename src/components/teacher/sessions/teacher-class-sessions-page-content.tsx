@@ -5,12 +5,18 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import type { TeacherClassSessionListItem } from "@/lib/teacher/teacher-class-data"
 import {
+  formatSessionDate,
+  formatSessionTime,
   formatLateThresholdLabel,
   getEffectiveSessionMeetingSettings,
   getMeetingPlatformLabel,
   getSessionJoinWindowState,
   SESSION_JOIN_LEAD_MINUTES,
 } from "@/lib/attendance-utils"
+import {
+  formatSessionDayName,
+  getJoinOpensMessage,
+} from "@/lib/relevant-session"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -152,31 +158,26 @@ export function TeacherClassSessionsPageContent({
                   {getMeetingPlatformLabel(classInfo.defaultMeetingPlatform)}
                 </p>
                 {nextSession && effectiveMeetingSettings ? (
-                  nextSessionJoinWindow?.isVisible ? (
-                    <TeacherJoinButton
-                      sessionId={nextSession.id}
-                      sessionStatus={nextSession.status}
-                      meetingPlatform={effectiveMeetingSettings.platform}
-                      meetingLink={effectiveMeetingSettings.link}
-                      initialJoin={nextSession.teacherJoin}
-                      align="start"
-                    />
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Next session:{" "}
-                        {new Date(nextSession.startTime).toLocaleDateString()} at{" "}
-                        {new Date(nextSession.startTime).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Teacher join tracking button appears{" "}
-                        {SESSION_JOIN_LEAD_MINUTES} minutes before class time.
-                      </p>
-                    </div>
-                  )
+                  <TeacherJoinButton
+                    sessionId={nextSession.id}
+                    sessionStatus={nextSession.status}
+                    meetingPlatform={effectiveMeetingSettings.platform}
+                    meetingLink={effectiveMeetingSettings.link}
+                    initialJoin={nextSession.teacherJoin}
+                    disabledReason={
+                      nextSessionJoinWindow?.isVisible
+                        ? null
+                        : nextSession.status === "completed"
+                          ? "Today's class session has ended."
+                          : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                    }
+                    disabledLabel={
+                      nextSession.status === "completed"
+                        ? "Session ended"
+                        : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                    }
+                    align="start"
+                  />
                 ) : classInfo.defaultMeetingLink ? (
                   <div className="space-y-2">
                     <MeetingLinkButton href={classInfo.defaultMeetingLink} />
@@ -228,22 +229,92 @@ export function TeacherClassSessionsPageContent({
 
       <Card>
         <CardHeader>
-          <CardTitle>All Sessions</CardTitle>
+          <CardTitle>Today / Next Session</CardTitle>
           <CardDescription>
-            {total} session{total !== 1 ? "s" : ""} synced from the admin class
-            schedule
+            Only the relevant class session is shown by default
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SessionsTable
-            sessions={sessions}
-            classMeetingPlatform={classInfo.defaultMeetingPlatform}
-            classMeetingLink={classInfo.defaultMeetingLink}
-            total={total}
-            page={page}
-            limit={limit}
-            onPageChange={handlePageChange}
-          />
+          {nextSession && effectiveMeetingSettings ? (
+            <div className="rounded-lg border p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0 space-y-2">
+                  <p className="break-words text-base font-semibold">
+                    {nextSession.title || "Class Session"}
+                  </p>
+                  <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+                    <p>
+                      <span className="font-medium text-foreground">Day:</span>{" "}
+                      {formatSessionDayName(nextSession.startTime)}
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Date:</span>{" "}
+                      {formatSessionDate(new Date(nextSession.startTime))}
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Time:</span>{" "}
+                      {formatSessionTime(new Date(nextSession.startTime))} -{" "}
+                      {formatSessionTime(new Date(nextSession.endTime))}
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Platform:</span>{" "}
+                      {getMeetingPlatformLabel(effectiveMeetingSettings.platform)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
+                  <TeacherJoinButton
+                    sessionId={nextSession.id}
+                    sessionStatus={nextSession.status}
+                    meetingPlatform={effectiveMeetingSettings.platform}
+                    meetingLink={effectiveMeetingSettings.link}
+                    initialJoin={nextSession.teacherJoin}
+                    disabledReason={
+                      nextSessionJoinWindow?.isVisible
+                        ? null
+                        : nextSession.status === "completed"
+                          ? "Today's class session has ended."
+                          : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                    }
+                    disabledLabel={
+                      nextSession.status === "completed"
+                        ? "Session ended"
+                        : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                    }
+                    align="start"
+                    showMeta={false}
+                    className="w-full md:w-auto"
+                  />
+                  <Button asChild variant="outline" className="w-full md:w-auto">
+                    <Link href={`/teacher/sessions/${nextSession.id}`}>
+                      View Details
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+              No today or upcoming session is available yet.
+            </div>
+          )}
+
+          <details className="mt-4 rounded-lg border bg-muted/20">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+              View all synced sessions ({total})
+            </summary>
+            <div className="border-t bg-background p-4">
+              <SessionsTable
+                sessions={sessions}
+                classMeetingPlatform={classInfo.defaultMeetingPlatform}
+                classMeetingLink={classInfo.defaultMeetingLink}
+                total={total}
+                page={page}
+                limit={limit}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          </details>
         </CardContent>
       </Card>
     </div>

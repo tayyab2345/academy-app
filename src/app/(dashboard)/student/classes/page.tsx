@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { authOptions } from "@/lib/auth"
+import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import { BookOpen, Calendar, Clock } from "lucide-react"
 
@@ -14,8 +15,23 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { isSessionActive } from "@/lib/attendance-utils"
+import { Button } from "@/components/ui/button"
+import { JoinSessionButton } from "@/components/student/join-session-button"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getEffectiveSessionMeetingSettings,
+  getSessionJoinWindowState,
+  isSessionActive,
+  SESSION_JOIN_LEAD_MINUTES,
+} from "@/lib/attendance-utils"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
+import {
+  formatSessionDayName,
+  getJoinOpensMessage,
+  getRelevantClassSession,
+  getStartOfLocalDay,
+} from "@/lib/relevant-session"
 
 export const metadata: Metadata = {
   title: "My Classes - Student - AcademyFlow",
@@ -36,6 +52,26 @@ export default async function StudentClassesPage() {
   if (!studentProfile) {
     redirect("/login")
   }
+
+  const activeClassIds = await prisma.enrollment.findMany({
+    where: {
+      studentProfileId: studentProfile.id,
+      status: "active",
+    },
+    select: {
+      classId: true,
+    },
+  })
+
+  await syncRecurringSessionsForClasses(
+    activeClassIds.map((enrollment) => enrollment.classId),
+    {
+      daysBack: 2,
+      daysAhead: 14,
+    }
+  )
+
+  const todayStart = getStartOfLocalDay()
 
   const enrollments = await prisma.enrollment.findMany({
     where: {
@@ -71,12 +107,27 @@ export default async function StudentClassesPage() {
           },
           sessions: {
             where: {
-              status: { in: ["scheduled", "ongoing"] },
+              sessionDate: {
+                gte: todayStart,
+              },
+              status: { in: ["scheduled", "ongoing", "completed"] },
+            },
+            include: {
+              attendances: {
+                where: {
+                  studentProfileId: studentProfile.id,
+                },
+                select: {
+                  joinTime: true,
+                  lateMinutes: true,
+                },
+                take: 1,
+              },
             },
             orderBy: {
               startTime: "asc",
             },
-            take: 3,
+            take: 7,
           },
         },
       },
@@ -107,12 +158,28 @@ export default async function StudentClassesPage() {
           {enrollments.map((enrollment) => {
             const cls = enrollment.class
             const primaryTeacher = cls.teachers[0]?.teacherProfile
+            const relevantSession = getRelevantClassSession(cls.sessions)
+            const joinWindow = relevantSession
+              ? getSessionJoinWindowState({
+                  startTime: relevantSession.startTime,
+                  endTime: relevantSession.endTime,
+                  status: relevantSession.status,
+                })
+              : null
+            const effectiveMeetingSettings = relevantSession
+              ? getEffectiveSessionMeetingSettings({
+                  sessionMeetingPlatform: relevantSession.meetingPlatform,
+                  sessionMeetingLink: relevantSession.meetingLink,
+                  classMeetingPlatform: cls.defaultMeetingPlatform,
+                  classMeetingLink: cls.defaultMeetingLink,
+                })
+              : null
+            const attendance = relevantSession?.attendances[0] || null
 
             return (
-              <Link key={cls.id} href={`/student/classes/${cls.id}`}>
-                <Card className="cursor-pointer transition-shadow hover:shadow-md">
+              <Card key={cls.id} className="transition-shadow hover:shadow-md">
                   <CardHeader>
-                    <CardTitle>{cls.name}</CardTitle>
+                    <CardTitle className="break-words">{cls.name}</CardTitle>
                     <CardDescription>
                       {cls.course.code} - {cls.course.name}
                     </CardDescription>
@@ -134,60 +201,95 @@ export default async function StudentClassesPage() {
                         emptyMessage="No recurring schedule has been configured yet."
                       />
 
-                      {cls.sessions.length > 0 && (
+                      {relevantSession ? (
                         <div>
                           <p className="mb-2 text-sm font-medium">
-                            Upcoming Sessions
+                            Today / Next Session
                           </p>
-                          <div className="space-y-2">
-                            {cls.sessions.map((sessionItem) => {
-                              const sessionData = {
-                                startTime: new Date(sessionItem.startTime),
-                                endTime: new Date(sessionItem.endTime),
-                                status: sessionItem.status,
-                              }
-                              const live = isSessionActive(sessionData)
-
-                              return (
-                                <div
-                                  key={sessionItem.id}
-                                  className="flex items-center justify-between rounded-lg border p-3"
-                                >
-                                  <div>
-                                    <p className="font-medium">
-                                      {sessionItem.title || "Class Session"}
-                                    </p>
-                                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                      <span className="flex items-center gap-1">
-                                        <Calendar className="h-3 w-3" />
-                                        {new Date(
-                                          sessionItem.startTime
-                                        ).toLocaleDateString()}
-                                      </span>
-                                      <span className="flex items-center gap-1">
-                                        <Clock className="h-3 w-3" />
-                                        {new Date(
-                                          sessionItem.startTime
-                                        ).toLocaleTimeString([], {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <Badge variant={live ? "success" : "outline"}>
-                                    {live ? "Live Now" : "Upcoming"}
+                          <div className="rounded-lg border p-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-medium">
+                                    {relevantSession.title || "Class Session"}
+                                  </p>
+                                  <Badge
+                                    variant={
+                                      isSessionActive({
+                                        startTime: new Date(relevantSession.startTime),
+                                        endTime: new Date(relevantSession.endTime),
+                                        status: relevantSession.status,
+                                      })
+                                        ? "success"
+                                        : "outline"
+                                    }
+                                  >
+                                    {isSessionActive({
+                                      startTime: new Date(relevantSession.startTime),
+                                      endTime: new Date(relevantSession.endTime),
+                                      status: relevantSession.status,
+                                    })
+                                      ? "Live Now"
+                                      : formatSessionDayName(relevantSession.startTime)}
                                   </Badge>
                                 </div>
-                              )
-                            })}
+                                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {formatSessionDate(new Date(relevantSession.startTime))}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {formatSessionTime(new Date(relevantSession.startTime))} -{" "}
+                                    {formatSessionTime(new Date(relevantSession.endTime))}
+                                  </span>
+                                </div>
+                              </div>
+                              {effectiveMeetingSettings ? (
+                                <JoinSessionButton
+                                  sessionId={relevantSession.id}
+                                  sessionStatus={relevantSession.status}
+                                  meetingPlatform={effectiveMeetingSettings.platform}
+                                  meetingLink={effectiveMeetingSettings.link}
+                                  initialAttendance={
+                                    attendance
+                                      ? {
+                                          joinTime: attendance.joinTime
+                                            ? attendance.joinTime.toISOString()
+                                            : null,
+                                          lateMinutes: attendance.lateMinutes,
+                                        }
+                                      : null
+                                  }
+                                  disabledReason={
+                                    joinWindow?.isVisible
+                                      ? null
+                                      : relevantSession.status === "completed"
+                                        ? "Today's class session has ended."
+                                        : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                                  }
+                                  disabledLabel={
+                                    relevantSession.status === "completed"
+                                      ? "Session ended"
+                                      : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                                  }
+                                  align="start"
+                                  showMeta={false}
+                                  className="w-full sm:w-auto"
+                                />
+                              ) : null}
+                            </div>
                           </div>
                         </div>
-                      )}
+                      ) : null}
+                      <Link href={`/student/classes/${cls.id}`}>
+                        <Button variant="outline" className="w-full">
+                          View Class
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
             )
           })}
         </div>

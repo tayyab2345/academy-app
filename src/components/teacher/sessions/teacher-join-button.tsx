@@ -29,6 +29,8 @@ interface TeacherJoinButtonProps {
   className?: string
   showMeta?: boolean
   align?: "start" | "end"
+  disabledReason?: string | null
+  disabledLabel?: string
 }
 
 export function TeacherJoinButton({
@@ -40,6 +42,8 @@ export function TeacherJoinButton({
   className,
   showMeta = true,
   align = "end",
+  disabledReason = null,
+  disabledLabel = "Join opens soon",
 }: TeacherJoinButtonProps) {
   const router = useRouter()
   const [teacherJoin, setTeacherJoin] = useState<TeacherJoinRecord | null>(
@@ -54,6 +58,7 @@ export function TeacherJoinButton({
 
   const canJoin =
     sessionStatus === "scheduled" || sessionStatus === "ongoing"
+  const disabledBySchedule = !!disabledReason && !teacherJoin
   const statusBadge = teacherJoin
     ? getSessionJoinStatusBadge(teacherJoin.status)
     : null
@@ -63,7 +68,7 @@ export function TeacherJoinButton({
   }
 
   const handleJoin = async () => {
-    if (!canJoin) {
+    if (!canJoin || disabledBySchedule) {
       return
     }
 
@@ -123,6 +128,7 @@ export function TeacherJoinButton({
         onClick={handleJoin}
         disabled={
           isLoading ||
+          disabledBySchedule ||
           !canJoin ||
           (meetingPlatform !== "in_person" && !meetingLink) ||
           (meetingPlatform === "in_person" && !!teacherJoin)
@@ -142,7 +148,9 @@ export function TeacherJoinButton({
         ) : (
           <Video className="mr-2 h-4 w-4" />
         )}
-        {teacherJoin
+        {disabledBySchedule && !teacherJoin
+          ? disabledLabel
+          : teacherJoin
           ? meetingPlatform === "in_person"
             ? "Joined"
             : "Open Class"
@@ -151,7 +159,9 @@ export function TeacherJoinButton({
             : "Join Class"}
       </Button>
 
-      {showMeta && teacherJoin ? (
+      {showMeta && disabledReason && !teacherJoin ? (
+        <p className="text-xs text-muted-foreground">{disabledReason}</p>
+      ) : showMeta && teacherJoin ? (
         <div className="space-y-1">
           {statusBadge ? (
             <Badge variant={statusBadge.variant as any}>{statusBadge.label}</Badge>

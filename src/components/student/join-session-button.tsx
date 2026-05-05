@@ -25,6 +25,8 @@ interface JoinSessionButtonProps {
   className?: string
   showMeta?: boolean
   align?: "start" | "end"
+  disabledReason?: string | null
+  disabledLabel?: string
 }
 
 export function JoinSessionButton({
@@ -36,6 +38,8 @@ export function JoinSessionButton({
   className,
   showMeta = true,
   align = "end",
+  disabledReason = null,
+  disabledLabel = "Join opens soon",
 }: JoinSessionButtonProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -49,6 +53,7 @@ export function JoinSessionButton({
   const hasJoined = !!joinRecord?.joinTime
   const canJoin =
     sessionStatus === "scheduled" || sessionStatus === "ongoing"
+  const disabledBySchedule = !!disabledReason && !hasJoined
   const joinStatus = useMemo(() => {
     if (!joinRecord?.joinTime) {
       return null
@@ -59,7 +64,7 @@ export function JoinSessionButton({
   const joinBadge = joinStatus ? getSessionJoinStatusBadge(joinStatus) : null
 
   const handleJoin = async () => {
-    if (!canJoin) {
+    if (!canJoin || disabledBySchedule) {
       return
     }
 
@@ -117,6 +122,7 @@ export function JoinSessionButton({
         onClick={handleJoin}
         disabled={
           isLoading ||
+          disabledBySchedule ||
           !canJoin ||
           (meetingPlatform !== "in_person" && !meetingLink) ||
           (meetingPlatform === "in_person" && hasJoined)
@@ -140,7 +146,9 @@ export function JoinSessionButton({
         ) : (
           <ExternalLink className="mr-2 h-4 w-4" />
         )}
-        {hasJoined
+        {disabledBySchedule && !hasJoined
+          ? disabledLabel
+          : hasJoined
           ? meetingPlatform === "in_person"
             ? "Attendance Recorded"
             : "Open Class"
@@ -149,7 +157,9 @@ export function JoinSessionButton({
             : "Join Class"}
       </Button>
 
-      {showMeta && joinRecord?.joinTime ? (
+      {showMeta && disabledReason && !joinRecord?.joinTime ? (
+        <p className="text-xs text-muted-foreground">{disabledReason}</p>
+      ) : showMeta && joinRecord?.joinTime ? (
         <div
           className={cn(
             "space-y-1",

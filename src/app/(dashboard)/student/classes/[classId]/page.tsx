@@ -29,11 +29,18 @@ import {
 } from "@/components/ui/card"
 import {
   formatLateThresholdLabel,
+  formatSessionDate,
+  formatSessionTime,
   getEffectiveSessionMeetingSettings,
   getMeetingPlatformLabel,
   getSessionJoinWindowState,
   SESSION_JOIN_LEAD_MINUTES,
 } from "@/lib/attendance-utils"
+import {
+  formatSessionDayName,
+  getJoinOpensMessage,
+  getRelevantClassSession,
+} from "@/lib/relevant-session"
 
 interface ClassDetailPageProps {
   params: {
@@ -69,7 +76,10 @@ async function fetchClassData(classId: string) {
     return null
   }
 
-  await syncRecurringSessionsForClass(classId)
+  await syncRecurringSessionsForClass(classId, {
+    daysBack: 2,
+    daysAhead: 14,
+  })
 
   const classData = await prisma.class.findUnique({
     where: { id: classId },
@@ -162,17 +172,14 @@ export default async function StudentClassDetailPage({
     notFound()
   }
 
-  const upcomingSessions = classData.sessions
+  const relevantSession = getRelevantClassSession(classData.sessions)
+  const upcomingSessions = relevantSession ? [relevantSession] : []
+  const pastSessions = classData.sessions
     .filter(
       (sessionItem) =>
-        sessionItem.status === "scheduled" || sessionItem.status === "ongoing"
+        sessionItem.status === "completed" &&
+        sessionItem.id !== relevantSession?.id
     )
-    .sort(
-      (left, right) =>
-        new Date(left.startTime).getTime() - new Date(right.startTime).getTime()
-    )
-  const pastSessions = classData.sessions
-    .filter((sessionItem) => sessionItem.status === "completed")
     .sort(
       (left, right) =>
         new Date(right.startTime).getTime() - new Date(left.startTime).getTime()
@@ -253,7 +260,7 @@ export default async function StudentClassDetailPage({
                     {getMeetingPlatformLabel(classData.defaultMeetingPlatform)}
                   </p>
                   {(() => {
-                    const nextSession = upcomingSessions[0] || null
+                    const nextSession = relevantSession
 
                     if (nextSession) {
                       const effectiveMeetingSettings = getEffectiveSessionMeetingSettings(
@@ -271,34 +278,37 @@ export default async function StudentClassDetailPage({
                       })
                       const studentAttendance = nextSession.attendances[0] || null
 
-                      if (joinWindow.isVisible) {
-                        return (
-                          <div className="pt-2">
-                            <JoinSessionButton
-                              sessionId={nextSession.id}
-                              sessionStatus={nextSession.status}
-                              meetingPlatform={effectiveMeetingSettings.platform}
-                              meetingLink={effectiveMeetingSettings.link}
-                              initialAttendance={
-                                studentAttendance
-                                  ? {
-                                      joinTime: studentAttendance.joinTime
-                                        ? studentAttendance.joinTime.toISOString()
-                                        : null,
-                                      lateMinutes: studentAttendance.lateMinutes,
-                                    }
-                                  : null
-                              }
-                              align="start"
-                            />
-                          </div>
-                        )
-                      }
-
                       return (
-                        <div className="pt-2 text-xs text-muted-foreground">
-                          Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes
-                          before the scheduled class time.
+                        <div className="pt-2">
+                          <JoinSessionButton
+                            sessionId={nextSession.id}
+                            sessionStatus={nextSession.status}
+                            meetingPlatform={effectiveMeetingSettings.platform}
+                            meetingLink={effectiveMeetingSettings.link}
+                            initialAttendance={
+                              studentAttendance
+                                ? {
+                                    joinTime: studentAttendance.joinTime
+                                      ? studentAttendance.joinTime.toISOString()
+                                      : null,
+                                    lateMinutes: studentAttendance.lateMinutes,
+                                  }
+                                : null
+                            }
+                            disabledReason={
+                              joinWindow.isVisible
+                                ? null
+                                : nextSession.status === "completed"
+                                  ? "Today's class session has ended."
+                                  : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                            }
+                            disabledLabel={
+                              nextSession.status === "completed"
+                                ? "Session ended"
+                                : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                            }
+                            align="start"
+                          />
                         </div>
                       )
                     }
@@ -371,15 +381,15 @@ export default async function StudentClassDetailPage({
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Upcoming Sessions</CardTitle>
+              <CardTitle>Today / Next Session</CardTitle>
               <CardDescription>
-                Join your class sessions here
+                Only the relevant class session is shown here
               </CardDescription>
             </CardHeader>
             <CardContent>
               {upcomingSessions.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  No upcoming sessions scheduled
+                  No upcoming session scheduled
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -415,24 +425,25 @@ export default async function StudentClassDetailPage({
                           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {new Date(sessionItem.startTime).toLocaleDateString()}
+                              {formatSessionDayName(sessionItem.startTime)}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {formatSessionDate(new Date(sessionItem.startTime))}
                             </span>
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {new Date(sessionItem.startTime).toLocaleTimeString(
-                                [],
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )}{" "}
-                              -{" "}
-                              {new Date(sessionItem.endTime).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {formatSessionTime(new Date(sessionItem.startTime))} -{" "}
+                              {formatSessionTime(new Date(sessionItem.endTime))}
                             </span>
                           </div>
+                          {classData.teachers[0] ? (
+                            <p className="text-sm text-muted-foreground">
+                              Teacher:{" "}
+                              {classData.teachers[0].teacherProfile.user.firstName}{" "}
+                              {classData.teachers[0].teacherProfile.user.lastName}
+                            </p>
+                          ) : null}
                           <div className="flex items-center gap-1 text-sm">
                             {effectiveMeetingSettings.platform === "in_person" ? (
                               <MapPin className="h-3 w-3" />
@@ -471,30 +482,35 @@ export default async function StudentClassDetailPage({
                             </div>
                           ) : null}
                         </div>
-                        {joinWindow.isVisible ? (
-                          <JoinSessionButton
-                            sessionId={sessionItem.id}
-                            sessionStatus={sessionItem.status}
-                            meetingPlatform={effectiveMeetingSettings.platform}
-                            meetingLink={effectiveMeetingSettings.link}
-                            initialAttendance={
-                              studentAttendance
-                                ? {
-                                    joinTime: studentAttendance.joinTime
-                                      ? studentAttendance.joinTime.toISOString()
-                                      : null,
-                                    lateMinutes: studentAttendance.lateMinutes,
-                                  }
-                                : null
-                            }
-                            align="start"
-                          />
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes
-                            before class time.
-                          </p>
-                        )}
+                        <JoinSessionButton
+                          sessionId={sessionItem.id}
+                          sessionStatus={sessionItem.status}
+                          meetingPlatform={effectiveMeetingSettings.platform}
+                          meetingLink={effectiveMeetingSettings.link}
+                          initialAttendance={
+                            studentAttendance
+                              ? {
+                                  joinTime: studentAttendance.joinTime
+                                    ? studentAttendance.joinTime.toISOString()
+                                    : null,
+                                  lateMinutes: studentAttendance.lateMinutes,
+                                }
+                              : null
+                          }
+                          disabledReason={
+                            joinWindow.isVisible
+                              ? null
+                              : sessionItem.status === "completed"
+                                ? "Today's class session has ended."
+                                : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                          }
+                          disabledLabel={
+                            sessionItem.status === "completed"
+                              ? "Session ended"
+                              : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                          }
+                          align="start"
+                        />
                       </div>
                     )
                   })}

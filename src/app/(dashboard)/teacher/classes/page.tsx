@@ -14,7 +14,20 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
+import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getEffectiveSessionMeetingSettings,
+  getSessionJoinWindowState,
+  SESSION_JOIN_LEAD_MINUTES,
+} from "@/lib/attendance-utils"
+import {
+  formatSessionDayName,
+  getJoinOpensMessage,
+} from "@/lib/relevant-session"
 
 export const metadata: Metadata = {
   title: "My Classes - Teacher - AcademyFlow",
@@ -56,9 +69,25 @@ export default async function TeacherClassesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {classes.map((cls) => {
+            const nextSession = cls.nextSession
+            const joinWindow = nextSession
+              ? getSessionJoinWindowState({
+                  startTime: nextSession.startTime,
+                  endTime: nextSession.endTime,
+                  status: nextSession.status,
+                })
+              : null
+            const effectiveMeetingSettings = nextSession
+              ? getEffectiveSessionMeetingSettings({
+                  sessionMeetingPlatform: nextSession.meetingPlatform,
+                  sessionMeetingLink: nextSession.meetingLink,
+                  classMeetingPlatform: cls.defaultMeetingPlatform,
+                  classMeetingLink: cls.defaultMeetingLink,
+                })
+              : null
+
             return (
-              <Link key={cls.id} href={`/teacher/classes/${cls.id}/sessions`}>
-                <Card className="h-full cursor-pointer transition-shadow hover:shadow-md">
+              <Card key={cls.id} className="h-full transition-shadow hover:shadow-md">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
@@ -99,24 +128,55 @@ export default async function TeacherClassesPage() {
                         </span>
                         <span className="font-medium">{cls.sessionCount}</span>
                       </div>
-                      {cls.nextSessionStartTime ? (
+                      {nextSession ? (
                         <div className="border-t pt-3">
                           <p className="mb-1 text-xs text-muted-foreground">
-                            Next Session
+                            Today / Next Session
                           </p>
-                          <p className="text-sm font-medium">
-                            {new Date(cls.nextSessionStartTime).toLocaleDateString()} at{" "}
-                            {new Date(cls.nextSessionStartTime).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">
+                              {formatSessionDayName(nextSession.startTime)} -{" "}
+                              {formatSessionDate(new Date(nextSession.startTime))}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {formatSessionTime(new Date(nextSession.startTime))} -{" "}
+                              {formatSessionTime(new Date(nextSession.endTime))}
+                            </p>
+                            {effectiveMeetingSettings ? (
+                              <TeacherJoinButton
+                                sessionId={nextSession.id}
+                                sessionStatus={nextSession.status}
+                                meetingPlatform={effectiveMeetingSettings.platform}
+                                meetingLink={effectiveMeetingSettings.link}
+                                initialJoin={nextSession.teacherJoin}
+                                disabledReason={
+                                  joinWindow?.isVisible
+                                    ? null
+                                    : nextSession.status === "completed"
+                                      ? "Today's class session has ended."
+                                      : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                                }
+                                disabledLabel={
+                                  nextSession.status === "completed"
+                                    ? "Session ended"
+                                    : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                                }
+                                align="start"
+                                showMeta={false}
+                                className="w-full"
+                              />
+                            ) : null}
+                          </div>
                         </div>
                       ) : null}
+                      <Link href={`/teacher/classes/${cls.id}/sessions`}>
+                        <Button variant="outline" className="w-full">
+                          View Class
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
             )
           })}
         </div>

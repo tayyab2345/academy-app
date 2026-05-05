@@ -18,6 +18,12 @@ import { calculateOutstandingAmount } from "@/lib/invoice-utils"
 import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
 import { prisma } from "@/lib/prisma"
 import {
+  formatSessionDayName,
+  getJoinOpensMessage,
+  getRelevantClassSession,
+  getStartOfLocalDay,
+} from "@/lib/relevant-session"
+import {
   formatSessionDate,
   formatSessionTime,
   getEffectiveSessionMeetingSettings,
@@ -71,6 +77,7 @@ async function getStudentDashboardCoreData(userId: string) {
       )
 
       const now = new Date()
+      const todayStart = getStartOfLocalDay(now)
       const recentAttendanceStart = new Date(now)
       recentAttendanceStart.setDate(recentAttendanceStart.getDate() - 30)
 
@@ -114,15 +121,17 @@ async function getStudentDashboardCoreData(userId: string) {
                 },
                 sessions: {
                   where: {
-                    endTime: { gte: now },
+                    sessionDate: {
+                      gte: todayStart,
+                    },
                     status: {
-                      in: ["scheduled", "ongoing"],
+                      in: ["scheduled", "ongoing", "completed"],
                     },
                   },
                   orderBy: {
                     startTime: "asc",
                   },
-                  take: 1,
+                  take: 7,
                   select: {
                     id: true,
                     title: true,
@@ -424,7 +433,7 @@ export default async function StudentDashboardPage() {
   const unreadNotifications = notifications.filter((notification) => !notification.isRead).length
   const academyPrimaryColor = session.user.academy?.primaryColor || "#059669"
   const visibleDashboardJoins = enrollments.slice(0, 4).filter((enrollment) => {
-    const nextSession = enrollment.class.sessions[0]
+    const nextSession = getRelevantClassSession(enrollment.class.sessions, now)
 
     if (!nextSession) {
       return false
@@ -556,7 +565,10 @@ export default async function StudentDashboardPage() {
               <div className="space-y-3">
                 {enrollments.slice(0, 4).map((enrollment) => {
                   const primaryTeacher = enrollment.class.teachers[0]?.teacherProfile
-                  const nextSession = enrollment.class.sessions[0]
+                  const nextSession = getRelevantClassSession(
+                    enrollment.class.sessions,
+                    now
+                  )
                   const joinWindow = nextSession
                     ? getSessionJoinWindowState({
                         startTime: nextSession.startTime,
@@ -600,7 +612,7 @@ export default async function StudentDashboardPage() {
                           )}
                           <p className="mt-2 text-xs text-muted-foreground">
                             {nextSession
-                              ? `Next session: ${formatSessionDate(new Date(nextSession.startTime))} at ${formatSessionTime(new Date(nextSession.startTime))}`
+                              ? `${formatSessionDayName(nextSession.startTime)} session: ${formatSessionDate(new Date(nextSession.startTime))} at ${formatSessionTime(new Date(nextSession.startTime))}`
                               : "No upcoming sessions scheduled"}
                           </p>
                           {nextSession ? (
@@ -628,7 +640,7 @@ export default async function StudentDashboardPage() {
                           </Link>
                         </div>
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-                          {nextSession && joinWindow?.isVisible && effectiveMeetingSettings ? (
+                          {nextSession && effectiveMeetingSettings ? (
                             <JoinSessionButton
                               sessionId={nextSession.id}
                               sessionStatus={nextSession.status}
@@ -646,6 +658,18 @@ export default async function StudentDashboardPage() {
                               }
                               align="start"
                               showMeta={false}
+                              disabledReason={
+                                joinWindow?.isVisible
+                                  ? null
+                                  : nextSession.status === "completed"
+                                    ? "Today's class session has ended."
+                                    : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                              }
+                              disabledLabel={
+                                nextSession.status === "completed"
+                                  ? "Session ended"
+                                  : getJoinOpensMessage(SESSION_JOIN_LEAD_MINUTES)
+                              }
                             />
                           ) : (
                             <Link href={`/student/classes/${enrollment.class.id}`}>
