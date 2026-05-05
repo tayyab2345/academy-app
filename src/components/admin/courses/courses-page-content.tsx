@@ -62,7 +62,7 @@ export function CoursesPageContent({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Courses</h2>
           <p className="text-muted-foreground">
@@ -85,7 +85,7 @@ export function CoursesPageContent({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSearch} className="flex gap-3">
+          <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -95,11 +95,14 @@ export function CoursesPageContent({
                 className="pl-9"
               />
             </div>
-            <Button type="submit">Search</Button>
+            <Button type="submit" className="sm:w-auto">
+              Search
+            </Button>
             {appliedSearch ? (
               <Button
                 type="button"
                 variant="ghost"
+                className="sm:w-auto"
                 onClick={() => {
                   setSearchQuery("")
                   router.push(`/admin/courses?limit=${limit}`)
@@ -122,7 +125,7 @@ export function CoursesPageContent({
             {total} course{total !== 1 ? "s" : ""} total
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           <CoursesTable
             courses={courses}
             total={total}

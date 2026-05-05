@@ -23,6 +23,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { CurrencyAmount } from "@/components/ui/currency-amount"
 import { InvoiceStatusBadge } from "@/components/finance/invoice-status-badge"
+import {
+  DesktopTableShell,
+  MobileCards,
+  MobileDetailRow,
+  MobileEmptyState,
+  MobileListCard,
+} from "@/components/admin/responsive-list"
 
 interface Invoice {
   id: string
@@ -100,7 +107,7 @@ export function InvoicesTable({
 
   return (
     <>
-      <div className="rounded-md border">
+      <DesktopTableShell>
         <Table>
           <TableHeader>
             <TableRow>
@@ -216,15 +223,112 @@ export function InvoicesTable({
             )}
           </TableBody>
         </Table>
-      </div>
+      </DesktopTableShell>
+
+      <MobileCards>
+        {invoices.length === 0 ? (
+          <MobileEmptyState
+            title="No invoices found"
+            description="Invoices will appear here after you create or send them."
+          />
+        ) : (
+          invoices.map((invoice) => (
+            <MobileListCard key={invoice.id}>
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-all font-mono text-sm font-semibold">
+                    {invoice.invoiceNumber}
+                  </p>
+                  <p className="mt-1 break-words text-base font-semibold leading-6">
+                    {invoice.studentProfile.user.firstName}{" "}
+                    {invoice.studentProfile.user.lastName}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {invoice.studentProfile.studentId}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <InvoiceStatusBadge status={invoice.status as any} />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Invoice actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/finance/invoices/${invoice.id}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View
+                        </Link>
+                      </DropdownMenuItem>
+                      {invoice.status !== "paid" && invoice.status !== "waived" && (
+                        <DropdownMenuItem asChild>
+                          <Link href={`/admin/finance/invoices/${invoice.id}/edit`}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      {invoice.status === "draft" && (
+                        <DropdownMenuItem
+                          onClick={() => handleSend(invoice.id)}
+                          disabled={sendingId === invoice.id}
+                        >
+                          <Send className="mr-2 h-4 w-4" />
+                          {sendingId === invoice.id ? "Sending..." : "Send"}
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 rounded-xl bg-muted/25 p-3">
+                <MobileDetailRow label="Details">
+                  <span className="block break-words">{invoice.description}</span>
+                  {invoice.class ? (
+                    <span className="mt-0.5 block break-words text-xs text-muted-foreground">
+                      {invoice.class.course.code} - {invoice.class.name}
+                    </span>
+                  ) : null}
+                </MobileDetailRow>
+                <MobileDetailRow label="Amount">
+                  <CurrencyAmount
+                    amount={invoice.totalAmount}
+                    currency={invoice.currency}
+                  />
+                </MobileDetailRow>
+                <MobileDetailRow label="Outstanding">
+                  <CurrencyAmount
+                    amount={invoice.outstandingAmount}
+                    currency={invoice.currency}
+                    className={
+                      invoice.outstandingAmount > 0
+                        ? "font-semibold"
+                        : "text-green-600"
+                    }
+                  />
+                </MobileDetailRow>
+                <MobileDetailRow label="Due Date">
+                  {new Date(invoice.dueDate).toLocaleDateString()}
+                </MobileDetailRow>
+              </div>
+            </MobileListCard>
+          ))
+        )}
+      </MobileCards>
 
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of{" "}
             {total} invoices
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"

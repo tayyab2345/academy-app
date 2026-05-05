@@ -118,7 +118,7 @@ export default function FeePlansPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Fee Plans</h2>
           <p className="text-muted-foreground">
@@ -141,8 +141,8 @@ export default function FeePlansPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSearch} className="flex flex-wrap gap-3">
-            <div className="relative min-w-[200px] flex-1">
+          <form onSubmit={handleSearch} className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
+            <div className="relative min-w-0 lg:min-w-[240px] lg:flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search by name or description..."
@@ -152,7 +152,7 @@ export default function FeePlansPage() {
               />
             </div>
             <Select value={frequencyFilter} onValueChange={setFrequencyFilter}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-full lg:w-[160px]">
                 <SelectValue placeholder="Frequency" />
               </SelectTrigger>
               <SelectContent>
@@ -164,7 +164,7 @@ export default function FeePlansPage() {
               </SelectContent>
             </Select>
             <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-full lg:w-[140px]">
                 <SelectValue placeholder="Currency" />
               </SelectTrigger>
               <SelectContent>
@@ -177,7 +177,7 @@ export default function FeePlansPage() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[120px]">
+              <SelectTrigger className="w-full lg:w-[120px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -206,7 +206,7 @@ export default function FeePlansPage() {
             {total} fee plan{total !== 1 ? "s" : ""} total
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           {isLoading ? (
             <div className="space-y-3">
               <Skeleton className="h-10 w-full" />

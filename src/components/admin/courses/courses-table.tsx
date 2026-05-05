@@ -33,6 +33,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  DesktopTableShell,
+  MobileCards,
+  MobileDetailRow,
+  MobileEmptyState,
+  MobileListCard,
+} from "@/components/admin/responsive-list"
 
 interface Course {
   id: string
@@ -99,7 +106,7 @@ export function CoursesTable({
 
   return (
     <>
-      <div className="rounded-md border">
+      <DesktopTableShell>
         <Table>
           <TableHeader>
             <TableRow>
@@ -179,15 +186,91 @@ export function CoursesTable({
             )}
           </TableBody>
         </Table>
-      </div>
+      </DesktopTableShell>
+
+      <MobileCards>
+        {courses.length === 0 ? (
+          <MobileEmptyState
+            title="No courses found"
+            description="Create a course to start building your academy catalog."
+          />
+        ) : (
+          courses.map((course) => (
+            <MobileListCard key={course.id}>
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-base font-semibold leading-6">
+                    {course.name}
+                  </p>
+                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                    {course.code}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Badge variant={course.isActive ? "success" : "secondary"}>
+                    {course.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Course actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/courses/${course.id}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/courses/${course.id}/edit`}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => setDeleteId(course.id)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 rounded-xl bg-muted/25 p-3">
+                <MobileDetailRow label="Code">
+                  <span className="break-all font-mono">{course.code}</span>
+                </MobileDetailRow>
+                <MobileDetailRow label="Grade">
+                  {course.gradeLevel || "Not set"}
+                </MobileDetailRow>
+                <MobileDetailRow label="Subject">{course.subjectArea}</MobileDetailRow>
+                <MobileDetailRow label="Classes">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    <BookOpen className="h-4 w-4 text-muted-foreground" />
+                    {course._count.classes}
+                  </span>
+                </MobileDetailRow>
+              </div>
+            </MobileListCard>
+          ))
+        )}
+      </MobileCards>
 
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {(page - 1) * limit + 1} to{" "}
             {Math.min(page * limit, total)} of {total} courses
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"

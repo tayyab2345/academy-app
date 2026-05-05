@@ -34,6 +34,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { CurrencyAmount } from "@/components/ui/currency-amount"
+import {
+  DesktopTableShell,
+  MobileCards,
+  MobileDetailRow,
+  MobileEmptyState,
+  MobileListCard,
+} from "@/components/admin/responsive-list"
 
 interface FeePlan {
   id: string
@@ -105,7 +112,7 @@ export function FeePlansTable({
 
   return (
     <>
-      <div className="rounded-md border">
+      <DesktopTableShell>
         <Table>
           <TableHeader>
             <TableRow>
@@ -230,15 +237,126 @@ export function FeePlansTable({
             )}
           </TableBody>
         </Table>
-      </div>
+      </DesktopTableShell>
+
+      <MobileCards>
+        {feePlans.length === 0 ? (
+          <MobileEmptyState
+            title="No fee plans found"
+            description="Create a fee plan to assign billing templates to classes."
+          />
+        ) : (
+          feePlans.map((plan) => (
+            <MobileListCard key={plan.id}>
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-base font-semibold leading-6">
+                    {plan.name}
+                  </p>
+                  {plan.description ? (
+                    <p className="mt-1 break-words text-sm text-muted-foreground">
+                      {plan.description}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Badge variant={plan.isActive ? "success" : "secondary"}>
+                    {plan.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Fee plan actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/finance/fee-plans/${plan.id}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/finance/fee-plans/${plan.id}/edit`}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/finance/fee-plans/new?copy=${plan.id}`}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Duplicate
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => setDeleteId(plan.id)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 rounded-xl bg-muted/25 p-3">
+                <MobileDetailRow label="Amount">
+                  <CurrencyAmount
+                    amount={plan.amount}
+                    currency={plan.currency}
+                    className="font-semibold"
+                  />
+                </MobileDetailRow>
+                <MobileDetailRow label="Frequency">
+                  <span className="block">
+                    {frequencyLabels[plan.frequency] || plan.frequency}
+                  </span>
+                  {plan.frequency === "monthly" && plan.dueDayOfMonth ? (
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Due day {plan.dueDayOfMonth}
+                    </span>
+                  ) : null}
+                </MobileDetailRow>
+                <MobileDetailRow label="Late Fee">
+                  {plan.lateFeeType && plan.lateFeeAmount ? (
+                    <span>
+                      {plan.lateFeeType === "fixed" ? (
+                        <CurrencyAmount
+                          amount={plan.lateFeeAmount}
+                          currency={plan.currency}
+                        />
+                      ) : (
+                        `${plan.lateFeeAmount}%`
+                      )}{" "}
+                      <span className="text-xs text-muted-foreground">
+                        {plan.lateFeeType === "fixed" ? "fixed" : "percentage"}
+                      </span>
+                    </span>
+                  ) : (
+                    "None"
+                  )}
+                </MobileDetailRow>
+                <MobileDetailRow label="Classes">
+                  {plan._count.classAssignments} class
+                  {plan._count.classAssignments !== 1 ? "es" : ""}
+                </MobileDetailRow>
+              </div>
+            </MobileListCard>
+          ))
+        )}
+      </MobileCards>
 
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)}{" "}
             of {total} fee plans
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"

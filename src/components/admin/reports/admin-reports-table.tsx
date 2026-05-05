@@ -22,6 +22,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ReportStatusBadge } from "@/components/reports/report-status-badge"
+import {
+  DesktopTableShell,
+  MobileCards,
+  MobileDetailRow,
+  MobileEmptyState,
+  MobileListCard,
+} from "@/components/admin/responsive-list"
 
 interface AdminReportsTableProps {
   reports: AdminReportTableItem[]
@@ -49,7 +56,7 @@ export function AdminReportsTable({
 
   return (
     <>
-      <div className="rounded-md border">
+      <DesktopTableShell>
         <Table>
           <TableHeader>
             <TableRow>
@@ -144,15 +151,80 @@ export function AdminReportsTable({
             )}
           </TableBody>
         </Table>
-      </div>
+      </DesktopTableShell>
+
+      <MobileCards>
+        {reports.length === 0 ? (
+          <MobileEmptyState
+            title="No reports found"
+            description="Reports will appear here after teachers create or publish them."
+          />
+        ) : (
+          reports.map((report) => (
+            <MobileListCard key={report.id}>
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-base font-semibold leading-6">
+                    {report.studentProfile.user.firstName}{" "}
+                    {report.studentProfile.user.lastName}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {reportTypeLabels[report.reportType]} report
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <ReportStatusBadge status={report.status} />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Report actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/reports/${report.id}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View Report
+                        </Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 rounded-xl bg-muted/25 p-3">
+                <MobileDetailRow label="Class">
+                  <span className="block break-words">{report.class.name}</span>
+                  <span className="mt-0.5 block break-all font-mono text-xs text-muted-foreground">
+                    {report.class.course.code}
+                  </span>
+                </MobileDetailRow>
+                <MobileDetailRow label="Teacher">
+                  {report.teacherProfile.user.firstName}{" "}
+                  {report.teacherProfile.user.lastName}
+                </MobileDetailRow>
+                <MobileDetailRow label="Date">
+                  {new Date(report.reportDate).toLocaleDateString()}
+                </MobileDetailRow>
+                <MobileDetailRow label="Sections">
+                  {report._count.sections}
+                </MobileDetailRow>
+              </div>
+            </MobileListCard>
+          ))
+        )}
+      </MobileCards>
 
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of{" "}
             {total} reports
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"

@@ -212,9 +212,9 @@ export function ReportsPageContent({
                 }}
               />
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-full lg:w-[140px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -226,7 +226,7 @@ export function ReportsPageContent({
                 </SelectContent>
               </Select>
               <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-full lg:w-[140px]">
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -238,7 +238,7 @@ export function ReportsPageContent({
                 </SelectContent>
               </Select>
               <Select value={classFilter} onValueChange={setClassFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full lg:w-[180px]">
                   <SelectValue placeholder="Class" />
                 </SelectTrigger>
                 <SelectContent>
@@ -251,7 +251,7 @@ export function ReportsPageContent({
                 </SelectContent>
               </Select>
               <Select value={teacherFilter} onValueChange={setTeacherFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full lg:w-[180px]">
                   <SelectValue placeholder="Teacher" />
                 </SelectTrigger>
                 <SelectContent>
@@ -291,7 +291,7 @@ export function ReportsPageContent({
             {total} report{total !== 1 ? "s" : ""} total
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           <AdminReportsTable
             reports={reports}
             total={total}

@@ -86,7 +86,7 @@ export function ClassesPageContent({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Classes</h2>
           <p className="text-muted-foreground">
@@ -109,7 +109,7 @@ export function ClassesPageContent({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSearch} className="flex gap-3">
+          <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -120,7 +120,7 @@ export function ClassesPageContent({
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -131,11 +131,14 @@ export function ClassesPageContent({
                 ))}
               </SelectContent>
             </Select>
-            <Button type="submit">Search</Button>
+            <Button type="submit" className="sm:w-auto">
+              Search
+            </Button>
             {(appliedSearch || appliedStatusFilter) ? (
               <Button
                 type="button"
                 variant="ghost"
+                className="sm:w-auto"
                 onClick={() => {
                   setSearchQuery("")
                   setStatusFilter("All")
@@ -159,7 +162,7 @@ export function ClassesPageContent({
             {total} class{total !== 1 ? "es" : ""} total
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           <ClassesTable
             classes={classes}
             total={total}
