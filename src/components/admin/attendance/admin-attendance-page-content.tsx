@@ -399,6 +399,11 @@ export function AdminAttendancePageContent({
                           <Badge className="w-fit" variant={joinBadge.variant as any}>
                             {joinBadge.label}
                           </Badge>
+                          {teacherJoin.deductionRequired ? (
+                            <Badge className="w-fit" variant="destructive">
+                              Salary deduction
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="mt-3 space-y-1 text-sm text-muted-foreground">
                           <p className="break-words">
@@ -411,6 +416,11 @@ export function AdminAttendancePageContent({
                               ? `${teacherJoin.lateMinutes} minute${teacherJoin.lateMinutes === 1 ? "" : "s"} late`
                               : "Joined on time"}
                           </p>
+                          {teacherJoin.deductionReason ? (
+                            <p className="break-words text-amber-700">
+                              {teacherJoin.deductionReason}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     )

@@ -8,6 +8,7 @@ import {
 } from "@/lib/attendance-utils"
 import { notifyTeacherLateJoin } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
+import { upsertTeacherLateDeductionFlag } from "@/lib/teacher-late-deductions"
 
 export async function POST(
   _req: NextRequest,
@@ -116,6 +117,16 @@ export async function POST(
     })
 
     if (existingJoin) {
+      if (existingJoin.status === "late" && existingJoin.lateMinutes > 0) {
+        await upsertTeacherLateDeductionFlag({
+          classSessionId: params.sessionId,
+          teacherProfileId: teacherProfile.id,
+          joinTime: existingJoin.joinTime,
+          scheduledStartTime: classSession.startTime,
+          lateMinutes: existingJoin.lateMinutes,
+        })
+      }
+
       return NextResponse.json({
         success: true,
         alreadyJoined: true,
@@ -138,11 +149,18 @@ export async function POST(
     const joinResult = calculateSessionJoinStatus(
       classSession.startTime,
       joinTime,
-      classSession.class.lateThresholdMinutes
+      0
     )
 
-    const teacherJoin = await prisma.teacherSessionJoin.create({
-      data: {
+    const teacherJoin = await prisma.teacherSessionJoin.upsert({
+      where: {
+        classSessionId_teacherProfileId: {
+          classSessionId: params.sessionId,
+          teacherProfileId: teacherProfile.id,
+        },
+      },
+      update: {},
+      create: {
         classSessionId: params.sessionId,
         teacherProfileId: teacherProfile.id,
         joinTime,
@@ -157,6 +175,13 @@ export async function POST(
         teacherProfile.id,
         joinResult.lateMinutes
       )
+      await upsertTeacherLateDeductionFlag({
+        classSessionId: params.sessionId,
+        teacherProfileId: teacherProfile.id,
+        joinTime,
+        scheduledStartTime: classSession.startTime,
+        lateMinutes: joinResult.lateMinutes,
+      })
     }
 
     return NextResponse.json({

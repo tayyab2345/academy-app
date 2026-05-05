@@ -1,9 +1,141 @@
-import { Prisma } from "@prisma/client"
+import { NotificationType, Prisma, SessionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { formatSessionTime } from "@/lib/attendance-utils"
 import { getRoleBasedPath, hasRecentEmail, logEmailAttempt } from "@/lib/email/email-helpers"
 import { sendOverdueReminderEmail } from "@/lib/email/email-workflows"
-import { createNotification } from "@/lib/notification-service"
+import {
+  createNotification,
+  createNotificationsForMany,
+} from "@/lib/notification-service"
 import { AcademyBranding } from "@/lib/pdf/pdf-utils"
+
+const CLASS_REMINDER_LEAD_MINUTES = 5
+const CLASS_REMINDER_WINDOW_MINUTES = 2
+
+export async function sendClassStartReminders(): Promise<{
+  processed: number
+  teacherNotificationsCreated: number
+  studentNotificationsCreated: number
+}> {
+  const now = new Date()
+  const windowStart = new Date(
+    now.getTime() +
+      (CLASS_REMINDER_LEAD_MINUTES - CLASS_REMINDER_WINDOW_MINUTES / 2) *
+        60 *
+        1000
+  )
+  const windowEnd = new Date(
+    now.getTime() +
+      (CLASS_REMINDER_LEAD_MINUTES + CLASS_REMINDER_WINDOW_MINUTES / 2) *
+        60 *
+        1000
+  )
+
+  const sessions = await prisma.classSession.findMany({
+    where: {
+      status: SessionStatus.scheduled,
+      startTime: {
+        gte: windowStart,
+        lte: windowEnd,
+      },
+    },
+    select: {
+      id: true,
+      startTime: true,
+      class: {
+        select: {
+          id: true,
+          academyId: true,
+          name: true,
+          course: {
+            select: {
+              code: true,
+              name: true,
+            },
+          },
+          teachers: {
+            select: {
+              teacherProfile: {
+                select: {
+                  user: {
+                    select: {
+                      id: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          enrollments: {
+            where: {
+              status: "active",
+            },
+            select: {
+              studentProfile: {
+                select: {
+                  user: {
+                    select: {
+                      id: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      startTime: "asc",
+    },
+  })
+
+  let teacherNotificationsCreated = 0
+  let studentNotificationsCreated = 0
+
+  for (const session of sessions) {
+    const className = `${session.class.course.code}: ${session.class.name}`
+    const startTimeLabel = formatSessionTime(session.startTime)
+    const teacherNotifications = await createNotificationsForMany(
+      session.class.teachers.map(
+        (assignment) => assignment.teacherProfile.user.id
+      ),
+      {
+        academyId: session.class.academyId,
+        type: NotificationType.class_reminder,
+        title: "Class Starts Soon",
+        message: `Your class ${className} starts in ${CLASS_REMINDER_LEAD_MINUTES} minutes at ${startTimeLabel}.`,
+        actionUrl: `/teacher/sessions/${session.id}`,
+        entityType: "class_reminder_teacher",
+        entityId: session.id,
+      }
+    )
+
+    const studentNotifications = await createNotificationsForMany(
+      session.class.enrollments.map(
+        (enrollment) => enrollment.studentProfile.user.id
+      ),
+      {
+        academyId: session.class.academyId,
+        type: NotificationType.class_reminder,
+        title: "Class Starts Soon",
+        message: `Your class ${className} starts in ${CLASS_REMINDER_LEAD_MINUTES} minutes at ${startTimeLabel}. Please join on time.`,
+        actionUrl: `/student/classes/${session.class.id}`,
+        entityType: "class_reminder_student",
+        entityId: session.id,
+      }
+    )
+
+    teacherNotificationsCreated += teacherNotifications.length
+    studentNotificationsCreated += studentNotifications.length
+  }
+
+  return {
+    processed: sessions.length,
+    teacherNotificationsCreated,
+    studentNotificationsCreated,
+  }
+}
 
 interface OverdueReminderInvoice {
   id: string

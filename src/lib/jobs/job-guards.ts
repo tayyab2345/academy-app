@@ -9,6 +9,7 @@ interface JobRunResult {
 
 const JOB_INTERVALS: Record<string, number> = {
   overdue_reminder: 24 * 60 * 60 * 1000,
+  class_reminder: 60 * 1000,
   draft_report_reminder: 3 * 24 * 60 * 60 * 1000,
 }
 

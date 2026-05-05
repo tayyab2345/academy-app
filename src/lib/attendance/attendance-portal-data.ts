@@ -94,6 +94,8 @@ export type AttendanceTeacherJoinRow = {
   joinTime: string
   status: "on_time" | "late"
   lateMinutes: number
+  deductionRequired: boolean
+  deductionReason: string | null
   teacher: {
     firstName: string
     lastName: string
@@ -478,7 +480,7 @@ export async function getAdminAttendancePageData(input: {
     daySessions as AttendanceDaySessionCandidate[]
   )
 
-  const [attendanceRecords, teacherJoins] = attendanceSession
+  const [attendanceRecords, teacherJoins, teacherLateDeductions] = attendanceSession
     ? await Promise.all([
         prisma.attendance.findMany({
           where: {
@@ -510,6 +512,7 @@ export async function getAdminAttendancePageData(input: {
           },
           select: {
             id: true,
+            teacherProfileId: true,
             joinTime: true,
             status: true,
             lateMinutes: true,
@@ -529,11 +532,27 @@ export async function getAdminAttendancePageData(input: {
             joinTime: "asc",
           },
         }),
+        prisma.teacherLateDeduction.findMany({
+          where: {
+            classSessionId: attendanceSession.id,
+          },
+          select: {
+            teacherProfileId: true,
+            deductionRequired: true,
+            deductionReason: true,
+          },
+        }),
       ])
-    : [[], []]
+    : [[], [], []]
 
   const attendanceMap = new Map(
     attendanceRecords.map((record) => [record.studentProfileId, record])
+  )
+  const teacherDeductionMap = new Map(
+    teacherLateDeductions.map((deduction) => [
+      deduction.teacherProfileId,
+      deduction,
+    ])
   )
 
   const students = enrollments.map((enrollment) => {
@@ -576,6 +595,12 @@ export async function getAdminAttendancePageData(input: {
       joinTime: teacherJoin.joinTime.toISOString(),
       status: teacherJoin.status,
       lateMinutes: teacherJoin.lateMinutes,
+      deductionRequired:
+        teacherDeductionMap.get(teacherJoin.teacherProfileId)
+          ?.deductionRequired ?? false,
+      deductionReason:
+        teacherDeductionMap.get(teacherJoin.teacherProfileId)?.deductionReason ??
+        null,
       teacher: teacherJoin.teacherProfile.user,
     })),
     summary: buildAttendanceSummaryFromStudents(students),

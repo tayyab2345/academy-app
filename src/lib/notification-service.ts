@@ -1059,7 +1059,7 @@ export async function notifyAttendanceMarked(
   )
 
   await createNotificationsForMany(parentUserIds, {
-    type: "attendance",
+    type: NotificationType.student_late_join,
     title,
     message,
     actionUrl: `/parent/attendance?childId=${attendance.studentProfile.id}`,
@@ -1161,16 +1161,16 @@ export async function notifyStudentLateJoin(
   const dateParam = attendance.classSession.sessionDate.toISOString().slice(0, 10)
 
   await createNotificationsForMany(parentUserIds, {
-    type: "attendance",
+    type: NotificationType.student_late_join,
     title: "Late Join Recorded",
-    message: `${studentName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
+    message: `Your child ${studentName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
     actionUrl: `/parent/attendance?childId=${attendance.studentProfile.id}`,
     entityType: "attendance",
     entityId: attendance.id,
   })
 
   await createNotificationsForMany(teacherUserIds, {
-    type: "attendance",
+    type: NotificationType.student_late_join,
     title: "Student Joined Late",
     message: `${studentName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
     actionUrl: `/teacher/sessions/${attendance.classSessionId}`,
@@ -1181,7 +1181,7 @@ export async function notifyStudentLateJoin(
   await createNotificationsForMany(
     admins.map((admin) => admin.id),
     {
-      type: "attendance",
+      type: NotificationType.student_late_join,
       title: "Student Joined Late",
       message: `${studentName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
       actionUrl: `/admin/attendance?classId=${attendance.classSession.class.id}&date=${dateParam}`,
@@ -1292,7 +1292,7 @@ export async function notifyTeacherLateJoin(
   await createNotificationsForMany(
     admins.map((admin) => admin.id),
     {
-      type: "attendance",
+      type: NotificationType.teacher_late_join,
       title: "Teacher Joined Late",
       message: `${teacherName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
       actionUrl: `/admin/attendance?classId=${teacherJoin.classSession.class.id}&date=${dateParam}`,
@@ -1302,7 +1302,7 @@ export async function notifyTeacherLateJoin(
   )
 
   await createNotificationsForMany(studentUserIds, {
-    type: "attendance",
+    type: NotificationType.teacher_late_join,
     title: "Teacher Joined Late",
     message: `${teacherName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
     actionUrl: `/student/classes/${teacherJoin.classSession.class.id}`,
@@ -1311,7 +1311,7 @@ export async function notifyTeacherLateJoin(
   })
 
   await createNotificationsForMany(parentUserIds, {
-    type: "attendance",
+    type: NotificationType.teacher_late_join,
     title: "Teacher Joined Late",
     message: `${teacherName} joined ${className} ${lateMinutes} minute${lateMinutes === 1 ? "" : "s"} late on ${sessionDate}.`,
     actionUrl: "/parent/attendance",

@@ -46,6 +46,7 @@ model Academy {
   manualPaymentSubmissions  ManualPaymentSubmission[]
   exams                     Exam[]
   notifications             Notification[]
+  teacherLateDeductions     TeacherLateDeduction[]
 
   @@index([isDeleted, deletedAt])
   @@map("academies")
@@ -135,11 +136,12 @@ model TeacherProfile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  classesTaught ClassTeacher[]
-  materials     Material[]
-  attendances   Attendance[]
-  sessionJoins  TeacherSessionJoin[]
-  reports       Report[]
+  classesTaught  ClassTeacher[]
+  materials      Material[]
+  attendances    Attendance[]
+  sessionJoins   TeacherSessionJoin[]
+  lateDeductions TeacherLateDeduction[]
+  reports        Report[]
 
   @@map("teacher_profiles")
 }
@@ -279,15 +281,16 @@ model Class {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  teachers       ClassTeacher[]
-  enrollments    Enrollment[]
-  sessions       ClassSession[]
-  materials      Material[]
-  feeAssignments ClassFeeAssignment[]
-  invoices       Invoice[]
-  reports        Report[]
-  posts          Post[]
-  exams          Exam[]
+  teachers              ClassTeacher[]
+  enrollments           Enrollment[]
+  sessions              ClassSession[]
+  materials             Material[]
+  feeAssignments        ClassFeeAssignment[]
+  invoices              Invoice[]
+  reports               Report[]
+  posts                 Post[]
+  exams                 Exam[]
+  teacherLateDeductions TeacherLateDeduction[]
 
   @@index([academyId])
   @@index([courseId])
@@ -383,9 +386,10 @@ model ClassSession {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  attendances  Attendance[]
-  teacherJoins TeacherSessionJoin[]
-  materials    Material[]
+  attendances           Attendance[]
+  teacherJoins          TeacherSessionJoin[]
+  teacherLateDeductions TeacherLateDeduction[]
+  materials             Material[]
 
   @@index([classId, sessionDate])
   @@index([status])
@@ -411,6 +415,36 @@ model TeacherSessionJoin {
   @@unique([classSessionId, teacherProfileId])
   @@index([teacherProfileId, joinTime])
   @@map("teacher_session_joins")
+}
+
+model TeacherLateDeduction {
+  id String @id @default(cuid())
+
+  academyId String  @map("academy_id")
+  academy   Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  teacherProfileId String         @map("teacher_profile_id")
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  classSessionId String       @map("class_session_id")
+  classSession   ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+
+  classId String @map("class_id")
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  joinTime           DateTime @map("join_time")
+  scheduledStartTime DateTime @map("scheduled_start_time")
+  lateMinutes        Int      @map("late_minutes")
+  deductionRequired  Boolean  @default(false) @map("deduction_required")
+  deductionReason    String?  @map("deduction_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([classSessionId, teacherProfileId])
+  @@index([academyId, deductionRequired, createdAt(sort: Desc)])
+  @@index([teacherProfileId, createdAt(sort: Desc)])
+  @@map("teacher_late_deductions")
 }
 
 enum SessionJoinStatus {
@@ -1167,6 +1201,10 @@ enum NotificationType {
   payment_received
   invoice_sent
   payment_overdue
+  class_reminder
+  teacher_late_join
+  student_late_join
+  salary_deduction_marked
 }
 
 model Post {
