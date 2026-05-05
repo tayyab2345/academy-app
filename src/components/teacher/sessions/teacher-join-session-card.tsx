@@ -1,6 +1,10 @@
 "use client"
 
-import { getSessionJoinStatusBadge } from "@/lib/attendance-utils"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getSessionJoinStatusBadge,
+} from "@/lib/attendance-utils"
 import { Badge } from "@/components/ui/badge"
 import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
 
@@ -51,7 +55,8 @@ export function TeacherJoinSessionCard({
               <p>
                 Joined at{" "}
                 <span className="font-medium text-foreground">
-                  {new Date(initialJoin.joinTime).toLocaleString()}
+                  {formatSessionDate(initialJoin.joinTime)} at{" "}
+                  {formatSessionTime(initialJoin.joinTime)}
                 </span>
               </p>
               <p>

@@ -1,3 +1,5 @@
+import { zonedDateTimeToUtc } from "@/lib/time-zone"
+
 export const CLASS_WEEKDAY_VALUES = [
   "monday",
   "tuesday",
@@ -78,7 +80,7 @@ export function getClassWeekdayLabel(
   return format === "long" ? longWeekdayLabels[day] : shortWeekdayLabels[day]
 }
 
-function parseTimeParts(value: string | null | undefined) {
+export function parseClassScheduleTimeParts(value: string | null | undefined) {
   if (!value) {
     return null
   }
@@ -100,7 +102,7 @@ function parseTimeParts(value: string | null | undefined) {
 }
 
 export function formatClassScheduleTime(value: string | null | undefined) {
-  const parts = parseTimeParts(value)
+  const parts = parseClassScheduleTimeParts(value)
 
   if (!parts) {
     return value || null
@@ -157,21 +159,24 @@ export function buildDateTimeFromDateInputAndTime(
   dateInput: string,
   timeInput: string | null | undefined,
   fallbackHour: number,
-  fallbackMinute: number = 0
+  fallbackMinute: number = 0,
+  timeZone?: string | null
 ) {
-  const parsedTime = parseTimeParts(timeInput)
+  const parsedTime = parseClassScheduleTimeParts(timeInput)
 
   if (parsedTime) {
-    return new Date(
-      `${dateInput}T${parsedTime.hours.toString().padStart(2, "0")}:${parsedTime.minutes
-        .toString()
-        .padStart(2, "0")}:00`
-    )
+    return zonedDateTimeToUtc({
+      dateInput,
+      hours: parsedTime.hours,
+      minutes: parsedTime.minutes,
+      timeZone,
+    })
   }
 
-  return new Date(
-    `${dateInput}T${fallbackHour.toString().padStart(2, "0")}:${fallbackMinute
-      .toString()
-      .padStart(2, "0")}:00`
-  )
+  return zonedDateTimeToUtc({
+    dateInput,
+    hours: fallbackHour,
+    minutes: fallbackMinute,
+    timeZone,
+  })
 }

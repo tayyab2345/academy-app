@@ -27,6 +27,14 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import {
+  formatSessionDate,
+  formatSessionTime,
+} from "@/lib/attendance-utils"
+import {
+  getEndOfLocalDay,
+  getStartOfLocalDay,
+} from "@/lib/relevant-session"
 
 interface TeacherDetailPageProps {
   params: {
@@ -86,10 +94,8 @@ async function fetchTeacher(teacherId: string) {
   }
 
   const now = new Date()
-  const startOfDay = new Date(now)
-  startOfDay.setHours(0, 0, 0, 0)
-  const endOfDay = new Date(now)
-  endOfDay.setHours(23, 59, 59, 999)
+  const startOfDay = getStartOfLocalDay(now)
+  const endOfDay = getEndOfLocalDay(now)
 
   const teacher = await prisma.teacherProfile.findUnique({
     where: { id: teacherId },
@@ -266,17 +272,7 @@ function getClassStatusBadgeVariant(status: string) {
 }
 
 function formatSessionDateTime(startTime: Date, endTime: Date) {
-  return `${startTime.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })} - ${startTime.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })} - ${endTime.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`
+  return `${formatSessionDate(startTime)} - ${formatSessionTime(startTime)} - ${formatSessionTime(endTime)}`
 }
 
 export default async function TeacherDetailPage({

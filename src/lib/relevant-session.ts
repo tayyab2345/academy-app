@@ -1,3 +1,9 @@
+import {
+  formatDateInputInTimeZone,
+  formatDayNameInTimeZone,
+  zonedDateTimeToUtc,
+} from "@/lib/time-zone"
+
 type SessionLike = {
   sessionDate?: Date | string | null
   startTime: Date | string
@@ -7,32 +13,50 @@ type SessionLike = {
 
 const RELEVANT_SESSION_STATUSES = new Set(["scheduled", "ongoing", "completed"])
 
-export function getStartOfLocalDay(date: Date = new Date()) {
-  const start = new Date(date)
-  start.setHours(0, 0, 0, 0)
-  return start
+export function getStartOfLocalDay(
+  date: Date = new Date(),
+  timeZone?: string | null
+) {
+  const dateInput = formatDateInputInTimeZone(date, timeZone)
+
+  return zonedDateTimeToUtc({
+    dateInput,
+    hours: 0,
+    minutes: 0,
+    timeZone,
+  })
 }
 
-export function getEndOfLocalDay(date: Date = new Date()) {
-  const end = new Date(date)
-  end.setHours(23, 59, 59, 999)
-  return end
+export function getEndOfLocalDay(
+  date: Date = new Date(),
+  timeZone?: string | null
+) {
+  const dateInput = formatDateInputInTimeZone(date, timeZone)
+  const end = zonedDateTimeToUtc({
+    dateInput,
+    hours: 23,
+    minutes: 59,
+    timeZone,
+  })
+
+  return new Date(end.getTime() + 59_999)
 }
 
-export function isSameLocalDay(left: Date | string, right: Date | string) {
-  const leftDate = new Date(left)
-  const rightDate = new Date(right)
-
+export function isSameLocalDay(
+  left: Date | string,
+  right: Date | string,
+  timeZone?: string | null
+) {
   return (
-    leftDate.getFullYear() === rightDate.getFullYear() &&
-    leftDate.getMonth() === rightDate.getMonth() &&
-    leftDate.getDate() === rightDate.getDate()
+    formatDateInputInTimeZone(new Date(left), timeZone) ===
+    formatDateInputInTimeZone(new Date(right), timeZone)
   )
 }
 
 export function getRelevantClassSession<T extends SessionLike>(
   sessions: T[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  timeZone?: string | null
 ): T | null {
   const sortedSessions = [...sessions]
     .filter((session) => RELEVANT_SESSION_STATUSES.has(session.status))
@@ -42,7 +66,7 @@ export function getRelevantClassSession<T extends SessionLike>(
     )
 
   const todaySessions = sortedSessions.filter((session) =>
-    isSameLocalDay(session.sessionDate || session.startTime, now)
+    isSameLocalDay(session.sessionDate || session.startTime, now, timeZone)
   )
 
   if (todaySessions.length > 0) {
@@ -63,10 +87,11 @@ export function getRelevantClassSession<T extends SessionLike>(
   )
 }
 
-export function formatSessionDayName(date: Date | string) {
-  return new Date(date).toLocaleDateString("en-US", {
-    weekday: "long",
-  })
+export function formatSessionDayName(
+  date: Date | string,
+  timeZone?: string | null
+) {
+  return formatDayNameInTimeZone(new Date(date), timeZone)
 }
 
 export function getJoinOpensMessage(leadMinutes: number) {

@@ -21,7 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { getAttendanceStatusBadge } from "@/lib/attendance-utils"
+import {
+  formatSessionTime,
+  getAttendanceStatusBadge,
+} from "@/lib/attendance-utils"
 import { UserAvatar } from "@/components/ui/user-avatar"
 
 interface Student {
@@ -208,7 +211,7 @@ export function AttendanceGrid({
                   </TableCell>
                   <TableCell>
                     {attendance?.joinTime
-                      ? new Date(attendance.joinTime).toLocaleTimeString()
+                      ? formatSessionTime(attendance.joinTime)
                       : "-"}
                   </TableCell>
                   <TableCell>

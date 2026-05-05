@@ -36,6 +36,8 @@ import { Separator } from "@/components/ui/separator"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import {
   formatLateThresholdLabel,
+  formatSessionDate,
+  formatSessionTime,
   getMeetingPlatformLabel,
 } from "@/lib/attendance-utils"
 
@@ -390,16 +392,9 @@ export default async function ClassDetailPage({
                           {sessionItem.title || "Class Session"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(sessionItem.startTime).toLocaleDateString()} at{" "}
-                          {new Date(sessionItem.startTime).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}{" "}
-                          -{" "}
-                          {new Date(sessionItem.endTime).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatSessionDate(sessionItem.startTime)} at{" "}
+                          {formatSessionTime(sessionItem.startTime)} -{" "}
+                          {formatSessionTime(sessionItem.endTime)}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1">

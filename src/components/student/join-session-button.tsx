@@ -8,7 +8,11 @@ import {
   ExternalLink,
   Loader2,
 } from "lucide-react"
-import { getSessionJoinStatusBadge } from "@/lib/attendance-utils"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getSessionJoinStatusBadge,
+} from "@/lib/attendance-utils"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -170,7 +174,8 @@ export function JoinSessionButton({
             <Badge variant={joinBadge.variant as any}>{joinBadge.label}</Badge>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Joined {new Date(joinRecord.joinTime).toLocaleString()}
+            Joined {formatSessionDate(joinRecord.joinTime)} at{" "}
+            {formatSessionTime(joinRecord.joinTime)}
           </p>
           {(joinRecord.lateMinutes || 0) > 0 ? (
             <p className="text-xs text-yellow-600">

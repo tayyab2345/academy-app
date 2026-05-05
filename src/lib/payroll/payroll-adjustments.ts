@@ -7,6 +7,7 @@ import {
   SessionStatus,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { formatSessionDate } from "@/lib/attendance-utils"
 import {
   calculatePayrollRuleAmount,
   calculatePayrollBreakdownTotals,
@@ -90,7 +91,7 @@ function buildLateJoinReason(input: {
   courseCode: string | null
   lateMinutes: number
 }) {
-  return `Late join for ${buildSessionLabel(input)} on ${input.sessionDate.toLocaleDateString()} (${input.lateMinutes} minute${input.lateMinutes === 1 ? "" : "s"} late)`
+  return `Late join for ${buildSessionLabel(input)} on ${formatSessionDate(input.sessionDate)} (${input.lateMinutes} minute${input.lateMinutes === 1 ? "" : "s"} late)`
 }
 
 function buildAbsenceReason(input: {
@@ -98,7 +99,7 @@ function buildAbsenceReason(input: {
   className: string
   courseCode: string | null
 }) {
-  return `No join recorded for ${buildSessionLabel(input)} on ${input.sessionDate.toLocaleDateString()}`
+  return `No join recorded for ${buildSessionLabel(input)} on ${formatSessionDate(input.sessionDate)}`
 }
 
 export async function buildAutomaticPayrollAdjustments(recordId: string) {

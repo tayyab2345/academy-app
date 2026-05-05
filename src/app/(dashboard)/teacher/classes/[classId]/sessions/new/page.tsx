@@ -7,6 +7,7 @@ import {
   buildDateTimeFromDateInputAndTime,
   formatClassScheduleTime,
 } from "@/lib/class-schedule"
+import { formatDateInputInTimeZone } from "@/lib/time-zone"
 import { prisma } from "@/lib/prisma"
 import { ArrowLeft } from "lucide-react"
 
@@ -112,7 +113,7 @@ export default async function NewSessionPage({
     notFound()
   }
 
-  const todayDateInput = new Date().toISOString().slice(0, 10)
+  const todayDateInput = formatDateInputInTimeZone(new Date())
   const defaultStartDateTime = buildDateTimeFromDateInputAndTime(
     todayDateInput,
     classData.scheduleStartTime,

@@ -27,6 +27,8 @@ import { AttendanceGrid } from "@/components/teacher/attendance/attendance-grid"
 import { MeetingLinkButton } from "@/components/sessions/meeting-link-button"
 import {
   formatLateThresholdLabel,
+  formatSessionDate,
+  formatSessionTime,
   getEffectiveSessionMeetingSettings,
   getMeetingPlatformLabel,
   getSessionJoinWindowState,
@@ -335,13 +337,13 @@ export default async function SessionDetailPage({
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>{new Date(classSession.sessionDate).toLocaleDateString()}</span>
+                <span>{formatSessionDate(classSession.sessionDate)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span>
-                  {new Date(classSession.startTime).toLocaleTimeString()} -{" "}
-                  {new Date(classSession.endTime).toLocaleTimeString()}
+                  {formatSessionTime(classSession.startTime)} -{" "}
+                  {formatSessionTime(classSession.endTime)}
                 </span>
               </div>
             </div>

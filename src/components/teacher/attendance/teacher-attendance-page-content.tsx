@@ -15,7 +15,10 @@ import type {
   TeacherAttendancePageData,
   TeacherAttendanceStatus,
 } from "@/lib/teacher/teacher-attendance-data"
-import { getAttendanceStatusBadge } from "@/lib/attendance-utils"
+import {
+  formatSessionDate,
+  getAttendanceStatusBadge,
+} from "@/lib/attendance-utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -333,7 +336,7 @@ export function TeacherAttendancePageContent({
                   <span>
                     Existing attendance loaded from{" "}
                     {attendanceSession.title || "session record"} on{" "}
-                    {new Date(attendanceSession.sessionDate).toLocaleDateString()}
+                    {formatSessionDate(attendanceSession.sessionDate)}
                   </span>
                   <Link
                     href={`/teacher/sessions/${attendanceSession.id}`}

@@ -2,8 +2,17 @@ import { prisma } from "@/lib/prisma"
 import {
   buildDateTimeFromDateInputAndTime,
   hasConfiguredClassSchedule,
+  parseClassScheduleTimeParts,
   sortClassScheduleDays,
 } from "@/lib/class-schedule"
+import {
+  addDaysToDateInput,
+  formatDateInputInTimeZone,
+  getWeekdayFromDateInput,
+  maxDateInput,
+  minDateInput,
+  resolveAcademyTimeZone,
+} from "@/lib/time-zone"
 
 const DEFAULT_SYNC_DAYS_BACK = 14
 const DEFAULT_SYNC_DAYS_AHEAD = 60
@@ -25,46 +34,15 @@ type SchedulableClass = {
   scheduleStartTime: string | null
   scheduleEndTime: string | null
   defaultMeetingPlatform: "zoom" | "google_meet" | "teams" | "in_person"
-}
-
-function startOfDay(date: Date) {
-  const next = new Date(date)
-  next.setHours(0, 0, 0, 0)
-  return next
-}
-
-function endOfDay(date: Date) {
-  const next = new Date(date)
-  next.setHours(23, 59, 59, 999)
-  return next
+  academy: {
+    timezone: string
+  }
 }
 
 function addDays(date: Date, days: number) {
   const next = new Date(date)
   next.setDate(next.getDate() + days)
   return next
-}
-
-function formatDateInput(date: Date) {
-  const year = date.getFullYear()
-  const month = `${date.getMonth() + 1}`.padStart(2, "0")
-  const day = `${date.getDate()}`.padStart(2, "0")
-
-  return `${year}-${month}-${day}`
-}
-
-function getWeekdayValue(date: Date) {
-  const weekdayMap = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ] as const
-
-  return weekdayMap[date.getDay()]
 }
 
 function getAutoSessionStatus(startTime: Date, endTime: Date, now: Date) {
@@ -79,20 +57,37 @@ function getAutoSessionStatus(startTime: Date, endTime: Date, now: Date) {
   return "scheduled" as const
 }
 
-function buildGeneratedSessionData(classData: SchedulableClass, date: Date, now: Date) {
-  const dateInput = formatDateInput(date)
-  const sessionDate = new Date(`${dateInput}T00:00:00`)
+function buildGeneratedSessionData(
+  classData: SchedulableClass,
+  dateInput: string,
+  now: Date,
+  timeZone: string
+) {
+  const sessionDate = buildDateTimeFromDateInputAndTime(
+    dateInput,
+    "00:00",
+    0,
+    0,
+    timeZone
+  )
   const startTime = buildDateTimeFromDateInputAndTime(
     dateInput,
     classData.scheduleStartTime,
     9,
-    0
+    0,
+    timeZone
   )
+  const startTimeParts =
+    parseClassScheduleTimeParts(classData.scheduleStartTime) || {
+      hours: 9,
+      minutes: 0,
+    }
   const endTime = buildDateTimeFromDateInputAndTime(
     dateInput,
     classData.scheduleEndTime,
-    startTime.getHours() + 1,
-    startTime.getMinutes()
+    Math.min(startTimeParts.hours + 1, 23),
+    startTimeParts.minutes,
+    timeZone
   )
 
   return {
@@ -119,6 +114,11 @@ async function getSchedulableClass(classId: string) {
       scheduleStartTime: true,
       scheduleEndTime: true,
       defaultMeetingPlatform: true,
+      academy: {
+        select: {
+          timezone: true,
+        },
+      },
     },
   })
 }
@@ -136,8 +136,29 @@ export async function syncRecurringSessionsForClass(
   const now = options.now ?? new Date()
   const daysBack = options.daysBack ?? DEFAULT_SYNC_DAYS_BACK
   const daysAhead = options.daysAhead ?? DEFAULT_SYNC_DAYS_AHEAD
-  const syncWindowStart = startOfDay(addDays(now, -daysBack))
-  const syncWindowEnd = endOfDay(addDays(now, daysAhead))
+  const timeZone = resolveAcademyTimeZone(classData.academy.timezone)
+  const syncWindowStartInput = formatDateInputInTimeZone(
+    addDays(now, -daysBack),
+    timeZone
+  )
+  const syncWindowEndInput = formatDateInputInTimeZone(
+    addDays(now, daysAhead),
+    timeZone
+  )
+  const syncWindowStart = buildDateTimeFromDateInputAndTime(
+    syncWindowStartInput,
+    "00:00",
+    0,
+    0,
+    timeZone
+  )
+  const syncWindowEnd = buildDateTimeFromDateInputAndTime(
+    syncWindowEndInput,
+    "23:59",
+    23,
+    59,
+    timeZone
+  )
 
   const existingSessions = await prisma.classSession.findMany({
     where: {
@@ -174,7 +195,7 @@ export async function syncRecurringSessionsForClass(
   >()
 
   for (const session of existingSessions) {
-    const dateKey = formatDateInput(session.sessionDate)
+    const dateKey = formatDateInputInTimeZone(session.sessionDate, timeZone)
     const rows = existingByDate.get(dateKey) || []
     rows.push(session)
     existingByDate.set(dateKey, rows)
@@ -186,36 +207,31 @@ export async function syncRecurringSessionsForClass(
   >()
 
   if (hasConfiguredClassSchedule(classData)) {
-    const effectiveStart = new Date(
-      Math.max(
-        (classData.startDate
-          ? startOfDay(classData.startDate)
-          : syncWindowStart
-        ).getTime(),
-        syncWindowStart.getTime()
-      )
-    )
-    const effectiveEnd = new Date(
-      Math.min(
-        (classData.endDate ? endOfDay(classData.endDate) : syncWindowEnd).getTime(),
-        syncWindowEnd.getTime()
-      )
-    )
+    const classStartInput = classData.startDate
+      ? formatDateInputInTimeZone(classData.startDate, timeZone)
+      : syncWindowStartInput
+    const classEndInput = classData.endDate
+      ? formatDateInputInTimeZone(classData.endDate, timeZone)
+      : syncWindowEndInput
+    const effectiveStartInput = maxDateInput(classStartInput, syncWindowStartInput)
+    const effectiveEndInput = minDateInput(classEndInput, syncWindowEndInput)
     const scheduleDaySet = new Set(sortClassScheduleDays(classData.scheduleDays))
 
     for (
-      let cursor = new Date(effectiveStart);
-      cursor.getTime() <= effectiveEnd.getTime();
-      cursor = addDays(cursor, 1)
+      let dateInput = effectiveStartInput;
+      dateInput <= effectiveEndInput;
+      dateInput = addDaysToDateInput(dateInput, 1)
     ) {
-      const weekday = getWeekdayValue(cursor)
+      const weekday = getWeekdayFromDateInput(dateInput)
 
       if (!scheduleDaySet.has(weekday)) {
         continue
       }
 
-      const dateKey = formatDateInput(cursor)
-      desiredDateMap.set(dateKey, buildGeneratedSessionData(classData, cursor, now))
+      desiredDateMap.set(
+        dateInput,
+        buildGeneratedSessionData(classData, dateInput, now, timeZone)
+      )
     }
   }
 
@@ -263,13 +279,6 @@ export async function syncRecurringSessionsForClass(
       continue
     }
 
-    if (
-      generatedSession._count.attendances > 0 ||
-      generatedSession._count.teacherJoins > 0
-    ) {
-      continue
-    }
-
     const needsUpdate =
       generatedSession.startTime.getTime() !== desiredSession.startTime.getTime() ||
       generatedSession.endTime.getTime() !== desiredSession.endTime.getTime() ||
@@ -293,7 +302,7 @@ export async function syncRecurringSessionsForClass(
       continue
     }
 
-    const dateKey = formatDateInput(session.sessionDate)
+    const dateKey = formatDateInputInTimeZone(session.sessionDate, timeZone)
     const shouldExist = desiredDateMap.has(dateKey)
     const hasJoinOrAttendance =
       session._count.attendances > 0 || session._count.teacherJoins > 0

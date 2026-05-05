@@ -143,7 +143,7 @@ export function SessionsTable({
                     <div className="space-y-2">
                       <p className="text-base font-semibold leading-tight">
                         {session.title ||
-                          `Session ${new Date(session.sessionDate).toLocaleDateString()}`}
+                          `Session ${formatSessionDate(new Date(session.sessionDate))}`}
                       </p>
                       <div className="space-y-1 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export function SessionsTable({
                         <TableCell>
                           <p className="font-medium">
                             {session.title ||
-                              `Session ${new Date(session.sessionDate).toLocaleDateString()}`}
+                              `Session ${formatSessionDate(new Date(session.sessionDate))}`}
                           </p>
                         </TableCell>
                         <TableCell>

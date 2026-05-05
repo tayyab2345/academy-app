@@ -471,7 +471,8 @@ export default async function StudentClassDetailPage({
                             <div className="space-y-1 text-sm text-muted-foreground">
                               <p>
                                 Joined{" "}
-                                {new Date(studentAttendance.joinTime).toLocaleString()}
+                                {formatSessionDate(studentAttendance.joinTime)} at{" "}
+                                {formatSessionTime(studentAttendance.joinTime)}
                               </p>
                               <p>
                                 {joinStatus}
@@ -536,21 +537,13 @@ export default async function StudentClassDetailPage({
                           {sessionItem.title || "Class Session"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {new Date(sessionItem.startTime).toLocaleDateString()} at{" "}
-                          {new Date(sessionItem.startTime).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatSessionDate(sessionItem.startTime)} at{" "}
+                          {formatSessionTime(sessionItem.startTime)}
                         </p>
                         {sessionItem.attendances[0]?.joinTime ? (
                           <p className="mt-1 text-xs text-muted-foreground">
                             Joined{" "}
-                            {new Date(
-                              sessionItem.attendances[0].joinTime
-                            ).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {formatSessionTime(sessionItem.attendances[0].joinTime)}
                             {(sessionItem.attendances[0].lateMinutes || 0) > 0
                               ? ` | ${sessionItem.attendances[0].lateMinutes} minute${sessionItem.attendances[0].lateMinutes === 1 ? "" : "s"} late`
                               : " | on time"}

@@ -1,6 +1,10 @@
 "use client"
 
-import { getAttendanceStatusBadge } from "@/lib/attendance-utils"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getAttendanceStatusBadge,
+} from "@/lib/attendance-utils"
 import type { AttendanceRecordListItem } from "@/lib/attendance/attendance-portal-data"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -75,7 +79,7 @@ export function AttendanceRecordsTable({
                 <TableCell>
                   <div>
                     <p className="font-medium">
-                      {new Date(record.date).toLocaleDateString()}
+                      {formatSessionDate(record.date)}
                     </p>
                     {record.sessionTitle ? (
                       <p className="text-xs text-muted-foreground">
@@ -106,10 +110,7 @@ export function AttendanceRecordsTable({
                     {record.joinTime ? (
                       <div>
                         <p className="text-sm font-medium">
-                          {new Date(record.joinTime).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatSessionTime(record.joinTime)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {(record.lateMinutes || 0) > 0

@@ -12,6 +12,8 @@ import {
 import type { AdminAttendancePageData } from "@/lib/attendance/attendance-portal-data"
 import {
   formatLateThresholdLabel,
+  formatSessionDate,
+  formatSessionTime,
   getAttendanceStatusBadge,
   getSessionJoinStatusBadge,
   getSessionStatusBadge,
@@ -177,7 +179,7 @@ export function AdminAttendancePageContent({
                   <span className="min-w-0 break-words">
                     Reviewing attendance from{" "}
                     {attendanceSession.title || "session record"} on{" "}
-                    {new Date(attendanceSession.sessionDate).toLocaleDateString()}
+                    {formatSessionDate(attendanceSession.sessionDate)}
                   </span>
                   <Badge
                     className="w-fit"
@@ -261,9 +263,7 @@ export function AdminAttendancePageContent({
                               label="Joined At"
                               value={
                                 student.attendance?.joinTime
-                                  ? new Date(
-                                      student.attendance.joinTime
-                                    ).toLocaleString()
+                                  ? `${formatSessionDate(student.attendance.joinTime)} at ${formatSessionTime(student.attendance.joinTime)}`
                                   : "-"
                               }
                             />
@@ -275,9 +275,7 @@ export function AdminAttendancePageContent({
                               label="Marked At"
                               value={
                                 student.attendance
-                                  ? new Date(
-                                      student.attendance.markedAt
-                                    ).toLocaleString()
+                                  ? `${formatSessionDate(student.attendance.markedAt)} at ${formatSessionTime(student.attendance.markedAt)}`
                                   : "-"
                               }
                             />
@@ -335,7 +333,7 @@ export function AdminAttendancePageContent({
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               {student.attendance?.joinTime
-                                ? new Date(student.attendance.joinTime).toLocaleString()
+                                ? `${formatSessionDate(student.attendance.joinTime)} at ${formatSessionTime(student.attendance.joinTime)}`
                                 : "-"}
                             </TableCell>
                             <TableCell>
@@ -343,7 +341,7 @@ export function AdminAttendancePageContent({
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               {student.attendance
-                                ? new Date(student.attendance.markedAt).toLocaleString()
+                                ? `${formatSessionDate(student.attendance.markedAt)} at ${formatSessionTime(student.attendance.markedAt)}`
                                 : "-"}
                             </TableCell>
                             <TableCell>
@@ -405,7 +403,8 @@ export function AdminAttendancePageContent({
                         <div className="mt-3 space-y-1 text-sm text-muted-foreground">
                           <p className="break-words">
                             Joined at{" "}
-                            {new Date(teacherJoin.joinTime).toLocaleString()}
+                            {formatSessionDate(teacherJoin.joinTime)} at{" "}
+                            {formatSessionTime(teacherJoin.joinTime)}
                           </p>
                           <p className="break-words">
                             {teacherJoin.lateMinutes > 0
@@ -456,7 +455,7 @@ export function AdminAttendancePageContent({
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
                             <p className="font-medium">
-                              {new Date(historyItem.sessionDate).toLocaleDateString()}
+                              {formatSessionDate(historyItem.sessionDate)}
                             </p>
                             <p className="mt-1 break-words text-sm text-muted-foreground">
                               {historyItem.title || "Session attendance"}
@@ -474,10 +473,7 @@ export function AdminAttendancePageContent({
                             </Badge>
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <CalendarDays className="h-3 w-3" />
-                              {new Date(historyItem.startTime).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {formatSessionTime(historyItem.startTime)}
                             </div>
                           </div>
                         </div>

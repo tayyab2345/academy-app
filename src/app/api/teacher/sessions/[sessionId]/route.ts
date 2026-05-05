@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getEffectiveSessionMeetingSettings } from "@/lib/attendance-utils"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getEffectiveSessionMeetingSettings,
+} from "@/lib/attendance-utils"
 import { notifyClassParticipants } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
+import { dateTimeInputToUtc } from "@/lib/time-zone"
 import { z } from "zod"
 
 const updateSessionSchema = z.object({
@@ -30,6 +35,11 @@ async function verifySessionAccess(sessionId: string, userId: string, role: stri
           defaultMeetingLink: true,
           defaultMeetingPlatform: true,
           lateThresholdMinutes: true,
+          academy: {
+            select: {
+              timezone: true,
+            },
+          },
           course: {
             select: {
               code: true,
@@ -170,15 +180,25 @@ export async function PATCH(
     }
 
     const updateData: Record<string, unknown> = { ...validated.data }
+    const timeZone = access.classSession.class.academy.timezone
 
     if (updateData.sessionDate) {
-      updateData.sessionDate = new Date(updateData.sessionDate as string | Date)
+      updateData.sessionDate = dateTimeInputToUtc(
+        updateData.sessionDate as string | Date,
+        timeZone
+      )
     }
     if (updateData.startTime) {
-      updateData.startTime = new Date(updateData.startTime as string | Date)
+      updateData.startTime = dateTimeInputToUtc(
+        updateData.startTime as string | Date,
+        timeZone
+      )
     }
     if (updateData.endTime) {
-      updateData.endTime = new Date(updateData.endTime as string | Date)
+      updateData.endTime = dateTimeInputToUtc(
+        updateData.endTime as string | Date,
+        timeZone
+      )
     }
     if (updateData.meetingLink === "") {
       updateData.meetingLink = null
@@ -188,6 +208,19 @@ export async function PATCH(
       (updateData.startTime as Date | undefined) ?? access.classSession.startTime
     const endTime =
       (updateData.endTime as Date | undefined) ?? access.classSession.endTime
+    const sessionDate = updateData.sessionDate as Date | undefined
+
+    if (
+      [sessionDate, startTime, endTime]
+        .filter((date): date is Date => Boolean(date))
+        .some((date) => Number.isNaN(date.getTime()))
+    ) {
+      return NextResponse.json(
+        { error: "Invalid session date or time" },
+        { status: 400 }
+      )
+    }
+
     const requestedMeetingPlatform =
       (updateData.meetingPlatform as string | undefined) ??
       access.classSession.meetingPlatform
@@ -228,7 +261,7 @@ export async function PATCH(
     })
 
     try {
-      const sessionDateLabel = updatedSession.startTime.toLocaleString()
+      const sessionDateLabel = `${formatSessionDate(updatedSession.startTime)} at ${formatSessionTime(updatedSession.startTime)}`
       await notifyClassParticipants({
         classId: updatedSession.classId,
         type: "announcement",

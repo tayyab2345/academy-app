@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getEffectiveSessionMeetingSettings } from "@/lib/attendance-utils"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getEffectiveSessionMeetingSettings,
+} from "@/lib/attendance-utils"
 import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { notifyClassParticipants } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
 import { getTeacherClassSessionsPageData } from "@/lib/teacher/teacher-class-data"
+import { dateTimeInputToUtc } from "@/lib/time-zone"
 import { z } from "zod"
 
 const createSessionSchema = z.object({
@@ -39,6 +44,11 @@ async function verifyClassAccess(classId: string, userId: string, role: string) 
       defaultMeetingPlatform: true,
       defaultMeetingLink: true,
       lateThresholdMinutes: true,
+      academy: {
+        select: {
+          timezone: true,
+        },
+      },
       course: {
         select: {
           code: true,
@@ -231,9 +241,17 @@ export async function POST(
       )
     }
 
-    const sessionDate = new Date(validated.data.sessionDate)
-    const startTime = new Date(validated.data.startTime)
-    const endTime = new Date(validated.data.endTime)
+    const timeZone = access.classData.academy.timezone
+    const sessionDate = dateTimeInputToUtc(validated.data.sessionDate, timeZone)
+    const startTime = dateTimeInputToUtc(validated.data.startTime, timeZone)
+    const endTime = dateTimeInputToUtc(validated.data.endTime, timeZone)
+
+    if ([sessionDate, startTime, endTime].some((date) => Number.isNaN(date.getTime()))) {
+      return NextResponse.json(
+        { error: "Invalid session date or time" },
+        { status: 400 }
+      )
+    }
 
     if (endTime.getTime() <= startTime.getTime()) {
       return NextResponse.json(
@@ -283,7 +301,7 @@ export async function POST(
     })
 
     try {
-      const sessionDateLabel = newSession.startTime.toLocaleString()
+      const sessionDateLabel = `${formatSessionDate(newSession.startTime)} at ${formatSessionTime(newSession.startTime)}`
       await notifyClassParticipants({
         classId: params.classId,
         type: "announcement",

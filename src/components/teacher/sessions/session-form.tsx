@@ -10,6 +10,7 @@ import {
   formatLateThresholdLabel,
   getMeetingPlatformLabel,
 } from "@/lib/attendance-utils"
+import { formatDateTimeLocalInputInTimeZone } from "@/lib/time-zone"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -92,8 +93,7 @@ export function SessionForm({
 
   const formatDateTimeForInput = (date: string | Date | undefined) => {
     if (!date) return ""
-    const d = new Date(date)
-    return d.toISOString().slice(0, 16)
+    return formatDateTimeLocalInputInTimeZone(new Date(date))
   }
 
   const form = useForm<FormValues>({

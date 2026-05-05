@@ -1,6 +1,7 @@
 import { NotificationType, PostVisibility, Prisma, Role } from "@prisma/client"
 import { getInvoiceActionUrlForRole } from "@/lib/manual-payment-utils"
 import { getPostActionUrlForRole } from "@/lib/post-access"
+import { formatSessionDate } from "@/lib/attendance-utils"
 import {
   calculatePayrollBreakdownTotals,
   formatPayrollPeriod,
@@ -1140,7 +1141,7 @@ export async function notifyStudentLateJoin(
 
   const studentName = `${attendance.studentProfile.user.firstName} ${attendance.studentProfile.user.lastName}`
   const className = `${attendance.classSession.class.course.code}: ${attendance.classSession.class.name}`
-  const sessionDate = attendance.classSession.sessionDate.toLocaleDateString()
+  const sessionDate = formatSessionDate(attendance.classSession.sessionDate)
 
   const parentUserIds = attendance.studentProfile.parentLinks.map(
     (link) => link.parentProfile.user.id
@@ -1276,7 +1277,7 @@ export async function notifyTeacherLateJoin(
 
   const teacherName = `${teacherJoin.teacherProfile.user.firstName} ${teacherJoin.teacherProfile.user.lastName}`
   const className = `${teacherJoin.classSession.class.course.code}: ${teacherJoin.classSession.class.name}`
-  const sessionDate = teacherJoin.classSession.sessionDate.toLocaleDateString()
+  const sessionDate = formatSessionDate(teacherJoin.classSession.sessionDate)
   const dateParam = teacherJoin.classSession.sessionDate.toISOString().slice(0, 10)
   const studentUserIds = teacherJoin.classSession.class.enrollments.map(
     (enrollment) => enrollment.studentProfile.user.id

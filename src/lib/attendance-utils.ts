@@ -1,3 +1,8 @@
+import {
+  formatDateInTimeZone,
+  formatTimeInTimeZone,
+} from "@/lib/time-zone"
+
 export interface AttendanceCalculation {
   status: "present" | "late" | "absent"
   lateMinutes: number
@@ -144,21 +149,18 @@ export function getEffectiveSessionMeetingSettings(
   }
 }
 
-export function formatSessionTime(date: Date): string {
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  })
+export function formatSessionTime(
+  date: Date | string,
+  timeZone?: string | null
+): string {
+  return formatTimeInTimeZone(new Date(date), timeZone)
 }
 
-export function formatSessionDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
+export function formatSessionDate(
+  date: Date | string,
+  timeZone?: string | null
+): string {
+  return formatDateInTimeZone(new Date(date), timeZone)
 }
 
 export function getSessionJoinWindowState(

@@ -9,7 +9,11 @@ import {
   Loader2,
   Video,
 } from "lucide-react"
-import { getSessionJoinStatusBadge } from "@/lib/attendance-utils"
+import {
+  formatSessionDate,
+  formatSessionTime,
+  getSessionJoinStatusBadge,
+} from "@/lib/attendance-utils"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -167,7 +171,8 @@ export function TeacherJoinButton({
             <Badge variant={statusBadge.variant as any}>{statusBadge.label}</Badge>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Joined {new Date(teacherJoin.joinTime).toLocaleString()}
+            Joined {formatSessionDate(teacherJoin.joinTime)} at{" "}
+            {formatSessionTime(teacherJoin.joinTime)}
           </p>
           {teacherJoin.status === "late" ? (
             <p className="text-xs text-amber-600">
