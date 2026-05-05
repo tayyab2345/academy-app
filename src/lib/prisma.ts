@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client"
+import { shouldLogRuntimeDiagnostics } from "@/lib/runtime-flags"
 
 const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient
@@ -75,6 +76,10 @@ export function isPrismaInitializationError(error: unknown) {
 }
 
 function logPrismaDiagnostics() {
+  if (!shouldLogRuntimeDiagnostics()) {
+    return
+  }
+
   if (globalForPrisma.prismaDiagnosticsLogged) {
     return
   }

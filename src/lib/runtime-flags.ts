@@ -14,6 +14,13 @@ export function shouldSkipSubdomainCheck() {
   return isDemoModeEnabled() || isEnabled(process.env.SKIP_SUBDOMAIN_CHECK)
 }
 
+export function shouldLogRuntimeDiagnostics() {
+  return (
+    process.env.NODE_ENV === "development" ||
+    isEnabled(process.env.DEBUG_RUNTIME_DIAGNOSTICS)
+  )
+}
+
 export function isEmailVerificationRequired() {
   // TEMP: disable email verification for local/dev/demo until delivery is finalized.
   if (isDemoModeEnabled()) {

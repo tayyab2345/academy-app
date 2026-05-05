@@ -4,6 +4,7 @@ import { randomBytes } from "crypto"
 import { getStore } from "@netlify/blobs"
 import { del, get, head, put } from "@vercel/blob"
 import { prisma } from "@/lib/prisma"
+import { shouldLogRuntimeDiagnostics } from "@/lib/runtime-flags"
 
 const IS_RAILWAY_RUNTIME = Boolean(
   process.env.RAILWAY_ENVIRONMENT_ID ||
@@ -27,9 +28,11 @@ function resolveStorageProviderName() {
 
   if (requestedProvider === "local") {
     if (IS_RAILWAY_RUNTIME && !HAS_PERSISTENT_LOCAL_STORAGE_PATH) {
-      console.warn(
-        "[storage] STORAGE_PROVIDER=local without a mounted Railway volume is ephemeral. Falling back to persistent database storage."
-      )
+      if (shouldLogRuntimeDiagnostics()) {
+        console.warn(
+          "[storage] STORAGE_PROVIDER=local without a mounted Railway volume is ephemeral. Falling back to persistent database storage."
+        )
+      }
       return "database"
     }
 
@@ -866,11 +869,13 @@ export function getStorageProvider() {
       storageProvider = localStorageProvider
     }
 
-    console.info("[storage] initialized provider", {
-      provider: STORAGE_PROVIDER_NAME,
-      isRailwayRuntime: IS_RAILWAY_RUNTIME,
-      hasPersistentLocalStoragePath: HAS_PERSISTENT_LOCAL_STORAGE_PATH,
-    })
+    if (shouldLogRuntimeDiagnostics()) {
+      console.info("[storage] initialized provider", {
+        provider: STORAGE_PROVIDER_NAME,
+        isRailwayRuntime: IS_RAILWAY_RUNTIME,
+        hasPersistentLocalStoragePath: HAS_PERSISTENT_LOCAL_STORAGE_PATH,
+      })
+    }
   }
 
   return storageProvider

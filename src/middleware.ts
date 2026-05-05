@@ -23,7 +23,11 @@ export default withAuth(
       return NextResponse.redirect(new URL("/academy-deactivated", req.url))
     }
 
-    // Redirect authenticated users away from auth pages
+    // Redirect authenticated users away from public/auth pages before they render.
+    if (token && path === "/") {
+      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role as string | undefined), req.url))
+    }
+
     if (token && path.startsWith("/login")) {
       return NextResponse.redirect(new URL(getRoleRedirectPath(token.role as string | undefined), req.url))
     }
@@ -80,6 +84,7 @@ export default withAuth(
 export const config = {
   matcher: [
     "/admin/:path*",
+    "/",
     "/teacher/:path*",
     "/student/:path*",
     "/parent/:path*",

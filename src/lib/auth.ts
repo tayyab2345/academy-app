@@ -3,12 +3,20 @@ import type { Session } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { formatPrismaError, prisma } from "./prisma"
-import { isDemoModeEnabled, shouldSkipSubdomainCheck } from "./runtime-flags"
+import {
+  isDemoModeEnabled,
+  shouldLogRuntimeDiagnostics,
+  shouldSkipSubdomainCheck,
+} from "./runtime-flags"
 
 let authDiagnosticsLogged = false
-const ACADEMY_TOKEN_REFRESH_INTERVAL_MS = 60 * 1000
+const ACADEMY_TOKEN_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
 function logAuthDiagnostics() {
+  if (!shouldLogRuntimeDiagnostics()) {
+    return
+  }
+
   if (authDiagnosticsLogged) {
     return
   }
