@@ -1,9 +1,15 @@
+import { Prisma } from "@prisma/client"
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import {
+  createOrLinkSupabasePasswordUser,
+  getLinkedSupabaseAuthUserId,
+  normalizeAuthEmail,
+  updateSupabasePasswordUser,
+} from "@/lib/supabase-auth"
 import { z } from "zod"
-import bcrypt from "bcryptjs"
 
 const updateTeacherSchema = z.object({
   firstName: z.string().min(2).optional(),
@@ -90,6 +96,9 @@ export async function PATCH(
     }
 
     const { password, employeeId, ...updateData } = validated.data
+    const nextEmail = updateData.email
+      ? normalizeAuthEmail(updateData.email)
+      : undefined
 
     const existingTeacher = await prisma.teacherProfile.findUnique({
       where: { id: params.teacherId },
@@ -120,14 +129,97 @@ export async function PATCH(
       }
     }
 
-    const userUpdateData: Record<string, string | null> & {
-      passwordHash?: string
-    } = {}
+    if (nextEmail && nextEmail !== existingTeacher.user.email) {
+      const duplicateEmail = await prisma.user.findUnique({
+        where: { email: nextEmail },
+      })
+
+      if (duplicateEmail && duplicateEmail.id !== existingTeacher.userId) {
+        return NextResponse.json(
+          { error: "Email already exists" },
+          { status: 400 }
+        )
+      }
+    }
+
+    const userUpdateData: Prisma.UserUpdateInput = {}
     if (updateData.firstName) userUpdateData.firstName = updateData.firstName
     if (updateData.lastName) userUpdateData.lastName = updateData.lastName
     if (updateData.phone !== undefined) userUpdateData.phone = updateData.phone
-    if (password) {
-      userUpdateData.passwordHash = await bcrypt.hash(password, 10)
+    if (nextEmail) userUpdateData.email = nextEmail
+    if (updateData.isActive !== undefined) {
+      userUpdateData.isActive = updateData.isActive
+    }
+
+    const shouldTouchSupabaseAuth =
+      Boolean(password) ||
+      Boolean(nextEmail) ||
+      Boolean(updateData.firstName) ||
+      Boolean(updateData.lastName) ||
+      updateData.phone !== undefined
+
+    if (shouldTouchSupabaseAuth) {
+      let supabaseAuthUserId = getLinkedSupabaseAuthUserId(existingTeacher.user)
+
+      try {
+        if (!supabaseAuthUserId) {
+          if (!password) {
+            return NextResponse.json(
+              {
+                error:
+                  "This legacy teacher is not linked to Supabase Auth yet. Enter a new password or run the migration script first.",
+              },
+              { status: 400 }
+            )
+          }
+
+          const authUser = await createOrLinkSupabasePasswordUser({
+            email: nextEmail || existingTeacher.user.email,
+            password,
+            role: "teacher",
+            academyId: session.user.academyId,
+            firstName: updateData.firstName || existingTeacher.user.firstName,
+            lastName: updateData.lastName || existingTeacher.user.lastName,
+            phone:
+              updateData.phone === undefined
+                ? existingTeacher.user.phone
+                : updateData.phone,
+          })
+
+          supabaseAuthUserId = authUser.user.id
+          userUpdateData.supabaseAuthUserId = authUser.user.id
+        }
+
+        await updateSupabasePasswordUser(supabaseAuthUserId, {
+          email: nextEmail,
+          password,
+          role: "teacher",
+          academyId: session.user.academyId,
+          firstName: updateData.firstName || existingTeacher.user.firstName,
+          lastName: updateData.lastName || existingTeacher.user.lastName,
+          phone:
+            updateData.phone === undefined
+              ? existingTeacher.user.phone
+              : updateData.phone,
+        })
+
+        if (password) {
+          userUpdateData.passwordHash = null
+        }
+      } catch (error) {
+        console.error("[admin/teachers][update][supabase-auth] failed", {
+          teacherProfileId: params.teacherId,
+          email: nextEmail || existingTeacher.user.email,
+          error,
+        })
+        return NextResponse.json(
+          {
+            error:
+              "Could not update the teacher login account in Supabase Auth.",
+          },
+          { status: 502 }
+        )
+      }
     }
 
     const updatedTeacher = await prisma.$transaction(async (tx) => {

@@ -8,6 +8,12 @@ import {
   shouldLogRuntimeDiagnostics,
   shouldSkipSubdomainCheck,
 } from "./runtime-flags"
+import {
+  getSupabaseAuthEnvStatus,
+  isSupabasePasswordAuthConfigured,
+  normalizeAuthEmail,
+  signInWithSupabasePassword,
+} from "./supabase-auth"
 
 let authDiagnosticsLogged = false
 const ACADEMY_TOKEN_REFRESH_INTERVAL_MS = 5 * 60 * 1000
@@ -26,6 +32,7 @@ function logAuthDiagnostics() {
     hasNextAuthUrl: Boolean(process.env.NEXTAUTH_URL),
     nextAuthUrl: process.env.NEXTAUTH_URL ?? null,
     hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
+    supabaseAuth: getSupabaseAuthEnvStatus(),
     demoMode: isDemoModeEnabled(),
     skipSubdomainCheck: shouldSkipSubdomainCheck(),
   })
@@ -54,40 +61,110 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const normalizedEmail = credentials.email.trim().toLowerCase()
+          const normalizedEmail = normalizeAuthEmail(credentials.email)
+          const supabasePasswordAuthConfigured = isSupabasePasswordAuthConfigured()
 
-          // Find user with academy information
-          const user = await prisma.user.findUnique({
-            where: {
-              email: normalizedEmail,
-            },
-            include: {
-              academy: {
-                select: {
-                  id: true,
-                  name: true,
-                  subdomain: true,
-                  contactEmail: true,
-                  primaryColor: true,
-                  logoUrl: true,
-                  isDeleted: true,
-                  deletedAt: true,
-                }
+          let user = null
+
+          if (supabasePasswordAuthConfigured) {
+            const supabaseSignIn = await signInWithSupabasePassword(
+              normalizedEmail,
+              credentials.password
+            )
+
+            if (supabaseSignIn.ok) {
+              user = await prisma.user.findFirst({
+                where: {
+                  OR: [
+                    { supabaseAuthUserId: supabaseSignIn.user.id },
+                    { id: supabaseSignIn.user.id },
+                    { email: normalizedEmail },
+                  ],
+                },
+                include: {
+                  academy: {
+                    select: {
+                      id: true,
+                      name: true,
+                      subdomain: true,
+                      contactEmail: true,
+                      primaryColor: true,
+                      logoUrl: true,
+                      isDeleted: true,
+                      deletedAt: true,
+                    },
+                  },
+                },
+              })
+
+              if (user && user.supabaseAuthUserId !== supabaseSignIn.user.id) {
+                await prisma.user.update({
+                  where: { id: user.id },
+                  data: {
+                    supabaseAuthUserId: supabaseSignIn.user.id,
+                  },
+                })
+                user.supabaseAuthUserId = supabaseSignIn.user.id
               }
+            } else if (!supabaseSignIn.unavailable) {
+              console.info("[next-auth][authorize][supabase] password check failed", {
+                email: normalizedEmail,
+                message: supabaseSignIn.message,
+              })
+            } else {
+              console.warn("[next-auth][authorize][supabase] unavailable", {
+                email: normalizedEmail,
+                message: supabaseSignIn.message,
+              })
             }
-          })
-
-          if (!user || !user.isActive) {
-            throw new Error("Invalid email or password")
           }
 
-          // Verify password
-          const isPasswordValid = await bcrypt.compare(
-            credentials.password,
-            user.passwordHash
-          )
+          if (!user) {
+            // Local password fallback keeps existing admin/parent accounts usable.
+            // Student/teacher accounts use Supabase Auth when Supabase is configured.
+            user = await prisma.user.findUnique({
+              where: {
+                email: normalizedEmail,
+              },
+              include: {
+                academy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    subdomain: true,
+                    contactEmail: true,
+                    primaryColor: true,
+                    logoUrl: true,
+                    isDeleted: true,
+                    deletedAt: true,
+                  },
+                }
+              }
+            })
 
-          if (!isPasswordValid) {
+            if (
+              user &&
+              supabasePasswordAuthConfigured &&
+              (user.role === "student" || user.role === "teacher")
+            ) {
+              throw new Error("Invalid email or password")
+            }
+
+            if (!user?.passwordHash) {
+              throw new Error("Invalid email or password")
+            }
+
+            const isPasswordValid = await bcrypt.compare(
+              credentials.password,
+              user.passwordHash
+            )
+
+            if (!isPasswordValid) {
+              throw new Error("Invalid email or password")
+            }
+          }
+
+          if (!user || !user.isActive) {
             throw new Error("Invalid email or password")
           }
 

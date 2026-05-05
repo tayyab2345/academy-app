@@ -8,8 +8,13 @@ import {
 } from "@/lib/admin/admin-data"
 import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { prisma } from "@/lib/prisma"
+import {
+  createOrLinkSupabasePasswordUser,
+  deleteSupabaseAuthUser,
+  normalizeAuthEmail,
+  updateSupabasePasswordUser,
+} from "@/lib/supabase-auth"
 import { z } from "zod"
-import bcrypt from "bcryptjs"
 
 const createTeacherSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -93,18 +98,18 @@ export async function POST(req: NextRequest) {
     }
 
     const { password, employeeId, ...userData } = validated.data
+    const email = normalizeAuthEmail(userData.email)
 
-    // Check if email already exists in academy
+    // Check if email already exists in the app.
     const existingUser = await prisma.user.findFirst({
       where: {
-        email: userData.email,
-        academyId: session.user.academyId,
+        email,
       },
     })
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "Email already exists in this academy" },
+        { error: "Email already exists" },
         { status: 400 }
       )
     }
@@ -123,46 +128,117 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const passwordHash = await bcrypt.hash(password, 10)
+    let authUser: Awaited<ReturnType<typeof createOrLinkSupabasePasswordUser>>
 
-    const teacher = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: userData.email,
-          passwordHash,
+    try {
+      authUser = await createOrLinkSupabasePasswordUser({
+        email,
+        password,
+        role: "teacher",
+        academyId: session.user.academyId,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+      })
+
+      if (!authUser.created) {
+        await updateSupabasePasswordUser(authUser.user.id, {
+          email,
+          password,
+          role: "teacher",
+          academyId: session.user.academyId,
           firstName: userData.firstName,
           lastName: userData.lastName,
           phone: userData.phone,
-          role: "teacher",
-          academyId: session.user.academyId,
-        },
+        })
+      }
+    } catch (error) {
+      console.error("[admin/teachers][create][supabase-auth] failed", {
+        email,
+        error,
       })
-
-      const profile = await tx.teacherProfile.create({
-        data: {
-          userId: user.id,
-          employeeId,
-          qualification: userData.qualification,
-          specialization: userData.specialization,
-          bio: userData.bio,
-          maxWeeklyHours: userData.maxWeeklyHours,
+      return NextResponse.json(
+        {
+          error:
+            "Could not create the teacher login account. Please check Supabase Auth configuration.",
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              phone: true,
-              isActive: true,
+        { status: 502 }
+      )
+    }
+
+    const existingAuthLinkedUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: authUser.user.id },
+          { supabaseAuthUserId: authUser.user.id },
+        ],
+      },
+    })
+
+    if (existingAuthLinkedUser) {
+      return NextResponse.json(
+        { error: "This Supabase Auth user is already linked to an app user" },
+        { status: 400 }
+      )
+    }
+
+    let teacher
+
+    try {
+      teacher = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            id: authUser.user.id,
+            email,
+            passwordHash: null,
+            supabaseAuthUserId: authUser.user.id,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            phone: userData.phone,
+            role: "teacher",
+            academyId: session.user.academyId,
+          },
+        })
+
+        const profile = await tx.teacherProfile.create({
+          data: {
+            userId: user.id,
+            employeeId,
+            qualification: userData.qualification,
+            specialization: userData.specialization,
+            bio: userData.bio,
+            maxWeeklyHours: userData.maxWeeklyHours,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                isActive: true,
+              },
             },
           },
-        },
-      })
+        })
 
-      return profile
-    })
+        return profile
+      })
+    } catch (error) {
+      if (authUser.created) {
+        try {
+          await deleteSupabaseAuthUser(authUser.user.id)
+        } catch (cleanupError) {
+          console.error("[admin/teachers][create][supabase-auth-cleanup] failed", {
+            authUserId: authUser.user.id,
+            cleanupError,
+          })
+        }
+      }
+
+      throw error
+    }
 
     return NextResponse.json({ teacher }, { status: 201 })
   } catch (error) {

@@ -57,7 +57,8 @@ model Academy {
 model User {
   id                  String               @id @default(cuid())
   email               String               @unique
-  passwordHash        String               @map("password_hash")
+  passwordHash        String?              @map("password_hash")
+  supabaseAuthUserId  String?              @unique @map("supabase_auth_user_id")
   role                Role
   firstName           String               @map("first_name")
   lastName            String               @map("last_name")

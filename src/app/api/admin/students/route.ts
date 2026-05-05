@@ -8,8 +8,13 @@ import {
 } from "@/lib/admin/admin-data"
 import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { prisma } from "@/lib/prisma"
+import {
+  createOrLinkSupabasePasswordUser,
+  deleteSupabaseAuthUser,
+  normalizeAuthEmail,
+  updateSupabasePasswordUser,
+} from "@/lib/supabase-auth"
 import { z } from "zod"
-import bcrypt from "bcryptjs"
 
 const createStudentSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -83,17 +88,17 @@ export async function POST(req: NextRequest) {
     }
 
     const { password, studentId, ...userData } = validated.data
+    const email = normalizeAuthEmail(userData.email)
 
     const existingUser = await prisma.user.findFirst({
       where: {
-        email: userData.email,
-        academyId: session.user.academyId,
+        email,
       },
     })
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "Email already exists in this academy" },
+        { error: "Email already exists" },
         { status: 400 }
       )
     }
@@ -109,50 +114,121 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const passwordHash = await bcrypt.hash(password, 10)
+    let authUser: Awaited<ReturnType<typeof createOrLinkSupabasePasswordUser>>
 
-    const student = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: userData.email,
-          passwordHash,
+    try {
+      authUser = await createOrLinkSupabasePasswordUser({
+        email,
+        password,
+        role: "student",
+        academyId: session.user.academyId,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+      })
+
+      if (!authUser.created) {
+        await updateSupabasePasswordUser(authUser.user.id, {
+          email,
+          password,
+          role: "student",
+          academyId: session.user.academyId,
           firstName: userData.firstName,
           lastName: userData.lastName,
           phone: userData.phone,
-          role: "student",
-          academyId: session.user.academyId,
-        },
+        })
+      }
+    } catch (error) {
+      console.error("[admin/students][create][supabase-auth] failed", {
+        email,
+        error,
       })
-
-      const profile = await tx.studentProfile.create({
-        data: {
-          userId: user.id,
-          studentId,
-          dateOfBirth: new Date(userData.dateOfBirth),
-          gradeLevel: userData.gradeLevel,
-          enrollmentDate: userData.enrollmentDate
-            ? new Date(userData.enrollmentDate)
-            : new Date(),
-          medicalNotes: userData.medicalNotes,
-          emergencyContactName: userData.emergencyContactName,
-          emergencyContactPhone: userData.emergencyContactPhone,
+      return NextResponse.json(
+        {
+          error:
+            "Could not create the student login account. Please check Supabase Auth configuration.",
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              phone: true,
-              isActive: true,
+        { status: 502 }
+      )
+    }
+
+    const existingAuthLinkedUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: authUser.user.id },
+          { supabaseAuthUserId: authUser.user.id },
+        ],
+      },
+    })
+
+    if (existingAuthLinkedUser) {
+      return NextResponse.json(
+        { error: "This Supabase Auth user is already linked to an app user" },
+        { status: 400 }
+      )
+    }
+
+    let student
+
+    try {
+      student = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            id: authUser.user.id,
+            email,
+            passwordHash: null,
+            supabaseAuthUserId: authUser.user.id,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            phone: userData.phone,
+            role: "student",
+            academyId: session.user.academyId,
+          },
+        })
+
+        const profile = await tx.studentProfile.create({
+          data: {
+            userId: user.id,
+            studentId,
+            dateOfBirth: new Date(userData.dateOfBirth),
+            gradeLevel: userData.gradeLevel,
+            enrollmentDate: userData.enrollmentDate
+              ? new Date(userData.enrollmentDate)
+              : new Date(),
+            medicalNotes: userData.medicalNotes,
+            emergencyContactName: userData.emergencyContactName,
+            emergencyContactPhone: userData.emergencyContactPhone,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                isActive: true,
+              },
             },
           },
-        },
-      })
+        })
 
-      return profile
-    })
+        return profile
+      })
+    } catch (error) {
+      if (authUser.created) {
+        try {
+          await deleteSupabaseAuthUser(authUser.user.id)
+        } catch (cleanupError) {
+          console.error("[admin/students][create][supabase-auth-cleanup] failed", {
+            authUserId: authUser.user.id,
+            cleanupError,
+          })
+        }
+      }
+
+      throw error
+    }
 
     return NextResponse.json({ student }, { status: 201 })
   } catch (error) {

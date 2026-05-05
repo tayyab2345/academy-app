@@ -12,6 +12,7 @@ out/
 logs/
 
 /storage/
+.migration-output/
 
 .codex-temp/
 .codex-tmp/
