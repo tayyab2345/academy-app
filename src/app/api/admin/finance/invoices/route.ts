@@ -11,6 +11,7 @@ import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { prisma } from "@/lib/prisma"
 import { generateInvoiceNumber } from "@/lib/invoice-utils"
 import { isValidCurrency } from "@/lib/currency-utils"
+import { notifyInvoiceCreated } from "@/lib/notification-service"
 
 const createInvoiceSchema = z.object({
   studentProfileId: z.string().min(1, "Student is required"),
@@ -180,6 +181,12 @@ export async function POST(req: NextRequest) {
         },
       },
     })
+
+    try {
+      await notifyInvoiceCreated(invoice.id)
+    } catch (notificationError) {
+      console.error("Failed to send invoice create notifications:", notificationError)
+    }
 
     return NextResponse.json({ invoice }, { status: 201 })
   } catch (error) {

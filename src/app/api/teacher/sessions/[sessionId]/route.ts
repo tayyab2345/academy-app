@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getEffectiveSessionMeetingSettings } from "@/lib/attendance-utils"
+import { notifyClassParticipants } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 
@@ -23,7 +24,9 @@ async function verifySessionAccess(sessionId: string, userId: string, role: stri
     include: {
       class: {
         select: {
+          id: true,
           academyId: true,
+          name: true,
           defaultMeetingLink: true,
           defaultMeetingPlatform: true,
           lateThresholdMinutes: true,
@@ -223,6 +226,23 @@ export async function PATCH(
       where: { id: params.sessionId },
       data: updateData,
     })
+
+    try {
+      const sessionDateLabel = updatedSession.startTime.toLocaleString()
+      await notifyClassParticipants({
+        classId: updatedSession.classId,
+        type: "announcement",
+        title: "Class Session Updated",
+        message: `${access.classSession.class.course.code}: ${access.classSession.class.name} session was updated for ${sessionDateLabel}.`,
+        teacherActionUrl: `/teacher/sessions/${updatedSession.id}`,
+        studentActionUrl: `/student/classes/${updatedSession.classId}`,
+        parentActionUrl: "/parent/attendance",
+        entityType: "session_update",
+        entityId: `${updatedSession.id}:${updatedSession.updatedAt.toISOString()}`,
+      })
+    } catch (notificationError) {
+      console.error("Failed to send session update notifications:", notificationError)
+    }
 
     return NextResponse.json({ session: updatedSession })
   } catch (error) {

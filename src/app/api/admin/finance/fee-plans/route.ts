@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { isValidCurrency } from "@/lib/currency-utils"
+import { notifyFeePlanChanged } from "@/lib/notification-service"
 
 const createFeePlanSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -125,6 +126,12 @@ export async function POST(req: NextRequest) {
         isActive: validated.data.isActive,
       },
     })
+
+    try {
+      await notifyFeePlanChanged(feePlan.id, "created")
+    } catch (notificationError) {
+      console.error("Failed to send fee plan create notifications:", notificationError)
+    }
 
     return NextResponse.json({ feePlan }, { status: 201 })
   } catch (error) {

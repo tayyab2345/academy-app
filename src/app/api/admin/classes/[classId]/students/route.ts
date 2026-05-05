@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { notifyStudentsEnrolledInClass } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 
@@ -110,6 +111,15 @@ export async function POST(
         }
       }
     })
+
+    try {
+      await notifyStudentsEnrolledInClass(
+        params.classId,
+        validated.data.studentIds
+      )
+    } catch (notificationError) {
+      console.error("Failed to send student enrollment notifications:", notificationError)
+    }
 
     return NextResponse.json({
       success: true,

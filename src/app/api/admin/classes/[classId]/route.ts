@@ -6,6 +6,11 @@ import { syncRecurringSessionsForClass } from "@/lib/class-session-schedule"
 import { syncPrimaryTeacherAssignment } from "@/lib/class-teacher-assignment"
 import { prisma } from "@/lib/prisma"
 import { CLASS_WEEKDAY_VALUES } from "@/lib/class-schedule"
+import {
+  notifyClassScheduleChanged,
+  notifyClassTeacherAssigned,
+  notifyStudentsEnrolledInClass,
+} from "@/lib/notification-service"
 import { z } from "zod"
 
 const optionalDateInputSchema = z.preprocess(
@@ -254,8 +259,12 @@ export async function PATCH(
         courseId: true,
         startDate: true,
         endDate: true,
+        scheduleDays: true,
+        scheduleStartTime: true,
+        scheduleEndTime: true,
         defaultMeetingPlatform: true,
         defaultMeetingLink: true,
+        lateThresholdMinutes: true,
       },
     })
 
@@ -412,7 +421,45 @@ export async function PATCH(
       },
     })
 
-    await syncRecurringSessionsForClass(params.classId)
+    const sessionSyncResult = await syncRecurringSessionsForClass(params.classId)
+    const scheduleWasTouched =
+      validated.data.scheduleDays !== undefined ||
+      validated.data.scheduleStartTime !== undefined ||
+      validated.data.scheduleEndTime !== undefined ||
+      validated.data.defaultMeetingPlatform !== undefined ||
+      validated.data.defaultMeetingLink !== undefined ||
+      validated.data.lateThresholdMinutes !== undefined
+
+    const notificationResults = await Promise.allSettled([
+      ...(validated.data.teacherProfileId
+        ? [
+            notifyClassTeacherAssigned(params.classId, [
+              validated.data.teacherProfileId,
+            ]),
+          ]
+        : []),
+      ...(validated.data.studentProfileIds !== undefined &&
+      validated.data.studentProfileIds.length > 0
+        ? [
+            notifyStudentsEnrolledInClass(
+              params.classId,
+              validated.data.studentProfileIds
+            ),
+          ]
+        : []),
+      ...(scheduleWasTouched ||
+      sessionSyncResult.created > 0 ||
+      sessionSyncResult.updated > 0 ||
+      sessionSyncResult.deleted > 0
+        ? [notifyClassScheduleChanged(params.classId)]
+        : []),
+    ])
+
+    for (const result of notificationResults) {
+      if (result.status === "rejected") {
+        console.error("Failed to send class update notification:", result.reason)
+      }
+    }
 
     return NextResponse.json({ class: classData })
   } catch (error) {

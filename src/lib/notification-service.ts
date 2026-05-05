@@ -1,4 +1,4 @@
-import { NotificationType, PostVisibility, Role } from "@prisma/client"
+import { NotificationType, PostVisibility, Prisma, Role } from "@prisma/client"
 import { getInvoiceActionUrlForRole } from "@/lib/manual-payment-utils"
 import { getPostActionUrlForRole } from "@/lib/post-access"
 import {
@@ -9,6 +9,7 @@ import {
 import { prisma } from "@/lib/prisma"
 
 interface CreateNotificationParams {
+  academyId?: string | null
   userId: string
   type: NotificationType
   title: string
@@ -18,10 +19,94 @@ interface CreateNotificationParams {
   entityId?: string
 }
 
+type ClassParticipantContext = {
+  id: string
+  academyId: string
+  name: string
+  scheduleDays: string[]
+  scheduleStartTime: string | null
+  scheduleEndTime: string | null
+  defaultMeetingPlatform: string
+  defaultMeetingLink: string | null
+  course: {
+    code: string
+    name: string
+  }
+  teachers: Array<{
+    teacherProfile: {
+      id: string
+      user: {
+        id: string
+      }
+    }
+  }>
+  enrollments: Array<{
+    studentProfile: {
+      id: string
+      user: {
+        id: string
+        firstName: string
+        lastName: string
+      }
+      parentLinks: Array<{
+        parentProfile: {
+          user: {
+            id: string
+          }
+        }
+      }>
+    }
+  }>
+}
+
+async function resolveNotificationAcademyId(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { academyId: true },
+  })
+
+  return user?.academyId ?? null
+}
+
+function buildDuplicateWhere(
+  userId: string,
+  params: Omit<CreateNotificationParams, "userId">
+): Prisma.NotificationWhereInput | null {
+  if (!params.entityType || !params.entityId) {
+    return null
+  }
+
+  return {
+    userId,
+    type: params.type,
+    title: params.title,
+    message: params.message,
+    entityType: params.entityType,
+    entityId: params.entityId,
+  }
+}
+
 export async function createNotification(params: CreateNotificationParams) {
   try {
+    const academyId =
+      params.academyId === undefined
+        ? await resolveNotificationAcademyId(params.userId)
+        : params.academyId
+    const duplicateWhere = buildDuplicateWhere(params.userId, params)
+
+    if (duplicateWhere) {
+      const existingNotification = await prisma.notification.findFirst({
+        where: duplicateWhere,
+      })
+
+      if (existingNotification) {
+        return existingNotification
+      }
+    }
+
     const notification = await prisma.notification.create({
       data: {
+        academyId: academyId ?? undefined,
         userId: params.userId,
         type: params.type,
         title: params.title,
@@ -50,10 +135,58 @@ export async function createNotificationsForMany(
   }
 
   try {
+    const userAcademies =
+      params.academyId === undefined
+        ? await prisma.user.findMany({
+            where: { id: { in: uniqueUserIds } },
+            select: {
+              id: true,
+              academyId: true,
+            },
+          })
+        : []
+    const academyIdByUserId = new Map(
+      userAcademies.map((user) => [user.id, user.academyId])
+    )
+    const duplicateWhere = params.entityType && params.entityId
+      ? {
+          userId: {
+            in: uniqueUserIds,
+          },
+          type: params.type,
+          title: params.title,
+          message: params.message,
+          entityType: params.entityType,
+          entityId: params.entityId,
+        }
+      : null
+    const existingNotifications = duplicateWhere
+      ? await prisma.notification.findMany({
+          where: duplicateWhere,
+          select: {
+            userId: true,
+          },
+        })
+      : []
+    const existingUserIds = new Set(
+      existingNotifications.map((notification) => notification.userId)
+    )
+    const targetUserIds = uniqueUserIds.filter(
+      (userId) => !existingUserIds.has(userId)
+    )
+
+    if (targetUserIds.length === 0) {
+      return []
+    }
+
     const notifications = await prisma.$transaction(
-      uniqueUserIds.map((userId) =>
+      targetUserIds.map((userId) =>
         prisma.notification.create({
           data: {
+            academyId:
+              params.academyId === undefined
+                ? academyIdByUserId.get(userId)
+                : params.academyId ?? undefined,
             userId,
             type: params.type,
             title: params.title,
@@ -71,6 +204,516 @@ export async function createNotificationsForMany(
     console.error("Failed to create bulk notifications:", error)
     return []
   }
+}
+
+export async function notifyUsers(
+  userIds: string[],
+  params: Omit<CreateNotificationParams, "userId">
+) {
+  return createNotificationsForMany(userIds, params)
+}
+
+async function getClassParticipantContext(classId: string) {
+  return prisma.class.findUnique({
+    where: { id: classId },
+    select: {
+      id: true,
+      academyId: true,
+      name: true,
+      scheduleDays: true,
+      scheduleStartTime: true,
+      scheduleEndTime: true,
+      defaultMeetingPlatform: true,
+      defaultMeetingLink: true,
+      course: {
+        select: {
+          code: true,
+          name: true,
+        },
+      },
+      teachers: {
+        select: {
+          teacherProfile: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  id: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      enrollments: {
+        where: { status: "active" },
+        select: {
+          studentProfile: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+              parentLinks: {
+                select: {
+                  parentProfile: {
+                    select: {
+                      user: {
+                        select: {
+                          id: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
+function getClassLabel(classData: Pick<ClassParticipantContext, "course" | "name">) {
+  return `${classData.course.code}: ${classData.name}`
+}
+
+function formatScheduleSummary(
+  classData: Pick<
+    ClassParticipantContext,
+    "scheduleDays" | "scheduleStartTime" | "scheduleEndTime" | "defaultMeetingPlatform"
+  >
+) {
+  if (
+    classData.scheduleDays.length === 0 ||
+    !classData.scheduleStartTime ||
+    !classData.scheduleEndTime
+  ) {
+    return "Schedule details were updated."
+  }
+
+  const days = classData.scheduleDays
+    .map((day) => day.charAt(0).toUpperCase() + day.slice(1))
+    .join(", ")
+
+  return `${days}, ${classData.scheduleStartTime} - ${classData.scheduleEndTime} (${classData.defaultMeetingPlatform.replace("_", " ")})`
+}
+
+function getParentUserIdsForStudent(
+  studentProfile: ClassParticipantContext["enrollments"][number]["studentProfile"]
+) {
+  return studentProfile.parentLinks.map((link) => link.parentProfile.user.id)
+}
+
+export async function notifyStudentAndParents(input: {
+  academyId: string
+  studentProfileId: string
+  studentUserId: string
+  parentUserIds: string[]
+  studentTitle: string
+  studentMessage: string
+  parentTitle?: string
+  parentMessage: string
+  studentActionUrl?: string | null
+  parentActionUrl?: string | null
+  type?: NotificationType
+  entityType: string
+  entityId: string
+}) {
+  await createNotification({
+    academyId: input.academyId,
+    userId: input.studentUserId,
+    type: input.type ?? NotificationType.announcement,
+    title: input.studentTitle,
+    message: input.studentMessage,
+    actionUrl: input.studentActionUrl,
+    entityType: input.entityType,
+    entityId: input.entityId,
+  })
+
+  await createNotificationsForMany(input.parentUserIds, {
+    academyId: input.academyId,
+    type: input.type ?? NotificationType.announcement,
+    title: input.parentTitle ?? input.studentTitle,
+    message: input.parentMessage,
+    actionUrl: input.parentActionUrl,
+    entityType: input.entityType,
+    entityId: input.entityId,
+  })
+}
+
+export async function notifyClassParticipants(input: {
+  classId: string
+  title: string
+  message: string
+  type?: NotificationType
+  entityType: string
+  entityId: string
+  teacherActionUrl?: string | null
+  studentActionUrl?: string | null
+  parentActionUrl?: string | null
+  includeTeachers?: boolean
+  includeStudents?: boolean
+  includeParents?: boolean
+}) {
+  const classData = await getClassParticipantContext(input.classId)
+
+  if (!classData) {
+    return
+  }
+
+  const type = input.type ?? NotificationType.announcement
+  const includeTeachers = input.includeTeachers ?? true
+  const includeStudents = input.includeStudents ?? true
+  const includeParents = input.includeParents ?? true
+
+  if (includeTeachers) {
+    await createNotificationsForMany(
+      classData.teachers.map((assignment) => assignment.teacherProfile.user.id),
+      {
+        academyId: classData.academyId,
+        type,
+        title: input.title,
+        message: input.message,
+        actionUrl:
+          input.teacherActionUrl ?? `/teacher/classes/${classData.id}/sessions`,
+        entityType: input.entityType,
+        entityId: input.entityId,
+      }
+    )
+  }
+
+  if (includeStudents) {
+    await createNotificationsForMany(
+      classData.enrollments.map(
+        (enrollment) => enrollment.studentProfile.user.id
+      ),
+      {
+        academyId: classData.academyId,
+        type,
+        title: input.title,
+        message: input.message,
+        actionUrl: input.studentActionUrl ?? `/student/classes/${classData.id}`,
+        entityType: input.entityType,
+        entityId: input.entityId,
+      }
+    )
+  }
+
+  if (includeParents) {
+    await createNotificationsForMany(
+      classData.enrollments.flatMap((enrollment) =>
+        getParentUserIdsForStudent(enrollment.studentProfile)
+      ),
+      {
+        academyId: classData.academyId,
+        type,
+        title: input.title,
+        message: input.message,
+        actionUrl: input.parentActionUrl ?? "/parent/attendance",
+        entityType: input.entityType,
+        entityId: input.entityId,
+      }
+    )
+  }
+}
+
+export async function notifyClassTeacherAssigned(
+  classId: string,
+  teacherProfileIds: string[]
+) {
+  const classData = await getClassParticipantContext(classId)
+
+  if (!classData) {
+    return
+  }
+
+  const targetTeacherProfileIds = new Set(teacherProfileIds.filter(Boolean))
+  const teacherUserIds = classData.teachers
+    .filter((assignment) =>
+      targetTeacherProfileIds.has(assignment.teacherProfile.id)
+    )
+    .map((assignment) => assignment.teacherProfile.user.id)
+
+  await createNotificationsForMany(teacherUserIds, {
+    academyId: classData.academyId,
+    type: NotificationType.announcement,
+    title: "New Class Assignment",
+    message: `You have been assigned to a new class: ${classData.name}`,
+    actionUrl: `/teacher/classes/${classData.id}/sessions`,
+    entityType: "class_teacher",
+    entityId: classData.id,
+  })
+}
+
+export async function notifyStudentsEnrolledInClass(
+  classId: string,
+  studentProfileIds: string[]
+) {
+  const classData = await getClassParticipantContext(classId)
+
+  if (!classData) {
+    return
+  }
+
+  const targetStudentProfileIds = new Set(studentProfileIds.filter(Boolean))
+  const className = classData.name
+
+  for (const enrollment of classData.enrollments) {
+    const student = enrollment.studentProfile
+
+    if (!targetStudentProfileIds.has(student.id)) {
+      continue
+    }
+
+    const studentName = `${student.user.firstName} ${student.user.lastName}`
+
+    await notifyStudentAndParents({
+      academyId: classData.academyId,
+      studentProfileId: student.id,
+      studentUserId: student.user.id,
+      parentUserIds: getParentUserIdsForStudent(student),
+      studentTitle: "Class Enrollment",
+      studentMessage: `You have been enrolled in ${className}`,
+      parentTitle: "Class Enrollment",
+      parentMessage: `${studentName} has been enrolled in ${className}`,
+      studentActionUrl: `/student/classes/${classData.id}`,
+      parentActionUrl: "/parent/attendance",
+      type: NotificationType.announcement,
+      entityType: "enrollment",
+      entityId: `${classData.id}:${student.id}`,
+    })
+  }
+}
+
+export async function notifyClassScheduleChanged(classId: string) {
+  const classData = await getClassParticipantContext(classId)
+
+  if (!classData) {
+    return
+  }
+
+  await notifyClassParticipants({
+    classId,
+    type: NotificationType.announcement,
+    title: "Class Schedule Updated",
+    message: `Schedule for ${getClassLabel(classData)} has been updated: ${formatScheduleSummary(classData)}.`,
+    entityType: "class_schedule",
+    entityId: classId,
+  })
+}
+
+export async function notifyCourseChanged(
+  courseId: string,
+  action: "created" | "updated"
+) {
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      updatedAt: true,
+      classes: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  })
+
+  if (!course) {
+    return
+  }
+
+  await Promise.all(
+    course.classes.map((classData) =>
+      notifyClassParticipants({
+        classId: classData.id,
+        type: NotificationType.announcement,
+        title: action === "created" ? "Course Created" : "Course Updated",
+        message: `${course.code}: ${course.name} has been ${action} for ${classData.name}.`,
+        teacherActionUrl: `/teacher/classes/${classData.id}/sessions`,
+        studentActionUrl: `/student/classes/${classData.id}`,
+        parentActionUrl: "/parent/attendance",
+        entityType: "course",
+        entityId:
+          action === "updated"
+            ? `${course.id}:${classData.id}:${course.updatedAt.toISOString()}`
+            : `${course.id}:${classData.id}:created`,
+      })
+    )
+  )
+}
+
+async function getInvoiceStudentContext(invoiceId: string) {
+  return prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      studentProfile: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              academyId: true,
+            },
+          },
+          parentLinks: {
+            include: {
+              parentProfile: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
+export async function notifyInvoiceCreated(invoiceId: string) {
+  const invoice = await getInvoiceStudentContext(invoiceId)
+
+  if (!invoice) {
+    return
+  }
+
+  const studentName = `${invoice.studentProfile.user.firstName} ${invoice.studentProfile.user.lastName}`
+  const parentUserIds = invoice.studentProfile.parentLinks.map(
+    (link) => link.parentProfile.user.id
+  )
+
+  await notifyStudentAndParents({
+    academyId: invoice.studentProfile.user.academyId,
+    studentProfileId: invoice.studentProfile.id,
+    studentUserId: invoice.studentProfile.user.id,
+    parentUserIds,
+    studentTitle: "New Invoice Created",
+    studentMessage: `A new invoice has been created for you: ${invoice.invoiceNumber}`,
+    parentTitle: "New Invoice Created",
+    parentMessage: `A new invoice has been created for ${studentName}: ${invoice.invoiceNumber}`,
+    studentActionUrl: `/student/finance/invoices/${invoice.id}`,
+    parentActionUrl: `/parent/finance/invoices/${invoice.id}`,
+    type: NotificationType.invoice_sent,
+    entityType: "invoice_created",
+    entityId: invoice.id,
+  })
+}
+
+export async function notifyInvoiceUpdated(invoiceId: string) {
+  const invoice = await getInvoiceStudentContext(invoiceId)
+
+  if (!invoice) {
+    return
+  }
+
+  const studentName = `${invoice.studentProfile.user.firstName} ${invoice.studentProfile.user.lastName}`
+  const parentUserIds = invoice.studentProfile.parentLinks.map(
+    (link) => link.parentProfile.user.id
+  )
+
+  await notifyStudentAndParents({
+    academyId: invoice.studentProfile.user.academyId,
+    studentProfileId: invoice.studentProfile.id,
+    studentUserId: invoice.studentProfile.user.id,
+    parentUserIds,
+    studentTitle: "Invoice Updated",
+    studentMessage: `Invoice ${invoice.invoiceNumber} has been updated.`,
+    parentTitle: "Invoice Updated",
+    parentMessage: `Invoice ${invoice.invoiceNumber} for ${studentName} has been updated.`,
+    studentActionUrl: `/student/finance/invoices/${invoice.id}`,
+    parentActionUrl: `/parent/finance/invoices/${invoice.id}`,
+    type: NotificationType.invoice_sent,
+    entityType: "invoice_updated",
+    entityId: `${invoice.id}:${invoice.updatedAt.toISOString()}`,
+  })
+}
+
+export async function notifyFeePlanChanged(
+  feePlanId: string,
+  action: "created" | "updated"
+) {
+  const feePlan = await prisma.feePlan.findUnique({
+    where: { id: feePlanId },
+    include: {
+      classAssignments: {
+        include: {
+          class: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!feePlan) {
+    return
+  }
+
+  await Promise.all(
+    feePlan.classAssignments.map((assignment) =>
+      notifyClassParticipants({
+        classId: assignment.classId,
+        type: NotificationType.fee_due,
+        title: action === "created" ? "Fee Plan Created" : "Fee Plan Updated",
+        message: `${feePlan.name} has been ${action} for ${assignment.class.name}.`,
+        studentActionUrl: "/student/finance",
+        parentActionUrl: "/parent/finance",
+        includeTeachers: false,
+        entityType: "fee_plan",
+        entityId:
+          action === "updated"
+            ? `${feePlan.id}:${assignment.classId}:${feePlan.updatedAt.toISOString()}`
+            : `${feePlan.id}:${assignment.classId}:created`,
+      })
+    )
+  )
+}
+
+export async function notifyFeePlanAssignedToClass(
+  feePlanId: string,
+  classId: string
+) {
+  const feePlan = await prisma.feePlan.findUnique({
+    where: { id: feePlanId },
+    select: {
+      id: true,
+      name: true,
+    },
+  })
+
+  if (!feePlan) {
+    return
+  }
+
+  await notifyClassParticipants({
+    classId,
+    type: NotificationType.fee_due,
+    title: "Fee Plan Assigned",
+    message: `${feePlan.name} has been assigned to your class.`,
+    studentActionUrl: "/student/finance",
+    parentActionUrl: "/parent/finance",
+    includeTeachers: false,
+    entityType: "class_fee_plan",
+    entityId: `${feePlan.id}:${classId}`,
+  })
 }
 
 export async function notifyReportPublished(reportId: string) {
@@ -922,9 +1565,10 @@ export async function notifyPostPublished(postId: string) {
   recipientRoles.delete(post.author.id)
 
   const classLabel = post.class ? ` in ${post.class.name}` : ""
-  const notificationRows = [...recipientRoles.entries()].map(([userId, role]) =>
-    prisma.notification.create({
-      data: {
+  await Promise.all(
+    [...recipientRoles.entries()].map(([userId, role]) =>
+      createNotification({
+        academyId: post.author.academyId,
         userId,
         type: NotificationType.announcement,
         title: `New Announcement: ${post.title}`,
@@ -932,13 +1576,9 @@ export async function notifyPostPublished(postId: string) {
         actionUrl: getPostActionUrlForRole(role, post.id),
         entityType: "post",
         entityId: post.id,
-      },
-    })
+      })
+    )
   )
-
-  if (notificationRows.length > 0) {
-    await prisma.$transaction(notificationRows)
-  }
 }
 
 export async function notifyCommentReply(commentId: string) {

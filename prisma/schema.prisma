@@ -45,6 +45,7 @@ model Academy {
   paymentSettings           AcademyPaymentSettings?
   manualPaymentSubmissions  ManualPaymentSubmission[]
   exams                     Exam[]
+  notifications             Notification[]
 
   @@index([isDeleted, deletedAt])
   @@map("academies")
@@ -1131,6 +1132,9 @@ enum ResultFileType {
 model Notification {
   id String @id @default(cuid())
 
+  academyId String?  @map("academy_id")
+  academy   Academy? @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
   userId String @map("user_id")
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1144,6 +1148,8 @@ model Notification {
 
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([academyId, userId, isRead, createdAt(sort: Desc)])
+  @@index([academyId, entityType, entityId])
   @@index([userId, isRead, createdAt(sort: Desc)])
   @@index([userId, type])
   @@map("notifications")

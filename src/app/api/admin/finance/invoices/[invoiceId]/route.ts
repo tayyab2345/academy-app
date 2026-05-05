@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { calculateInvoiceStatus } from "@/lib/invoice-utils"
 import { isValidCurrency } from "@/lib/currency-utils"
+import { notifyInvoiceUpdated } from "@/lib/notification-service"
 
 const updateInvoiceSchema = z.object({
   invoiceCategory: z
@@ -231,6 +232,12 @@ export async function PATCH(
           },
         })
       }
+    }
+
+    try {
+      await notifyInvoiceUpdated(invoice.id)
+    } catch (notificationError) {
+      console.error("Failed to send invoice update notifications:", notificationError)
     }
 
     return NextResponse.json({ invoice })

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getEffectiveSessionMeetingSettings } from "@/lib/attendance-utils"
 import { getPrivateCacheHeaders } from "@/lib/http-cache"
+import { notifyClassParticipants } from "@/lib/notification-service"
 import { prisma } from "@/lib/prisma"
 import { getTeacherClassSessionsPageData } from "@/lib/teacher/teacher-class-data"
 import { z } from "zod"
@@ -280,6 +281,23 @@ export async function POST(
         status: "scheduled",
       },
     })
+
+    try {
+      const sessionDateLabel = newSession.startTime.toLocaleString()
+      await notifyClassParticipants({
+        classId: params.classId,
+        type: "announcement",
+        title: "Class Session Scheduled",
+        message: `${access.classData.course.code}: ${access.classData.name} has a class session scheduled for ${sessionDateLabel}.`,
+        teacherActionUrl: `/teacher/sessions/${newSession.id}`,
+        studentActionUrl: `/student/classes/${params.classId}`,
+        parentActionUrl: "/parent/attendance",
+        entityType: "session",
+        entityId: newSession.id,
+      })
+    } catch (notificationError) {
+      console.error("Failed to send session create notifications:", notificationError)
+    }
 
     return NextResponse.json({ session: newSession }, { status: 201 })
   } catch (error) {

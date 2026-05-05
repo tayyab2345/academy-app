@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { getNotificationsPageData } from "@/lib/notifications/notification-data"
 
 export const dynamic = "force-dynamic"
@@ -32,7 +31,9 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(data, {
-      headers: getPrivateCacheHeaders(30),
+      headers: {
+        "Cache-Control": "private, no-store",
+      },
     })
   } catch (error) {
     console.error("Failed to fetch notifications:", error)

@@ -12,6 +12,11 @@ import { syncPrimaryTeacherAssignment } from "@/lib/class-teacher-assignment"
 import { getPrivateCacheHeaders } from "@/lib/http-cache"
 import { prisma } from "@/lib/prisma"
 import { CLASS_WEEKDAY_VALUES } from "@/lib/class-schedule"
+import {
+  notifyClassScheduleChanged,
+  notifyClassTeacherAssigned,
+  notifyStudentsEnrolledInClass,
+} from "@/lib/notification-service"
 import { z } from "zod"
 
 const optionalDateInputSchema = z.preprocess(
@@ -253,7 +258,33 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    await syncRecurringSessionsForClass(createdClassId)
+    const sessionSyncResult = await syncRecurringSessionsForClass(createdClassId)
+    const notificationResults = await Promise.allSettled([
+      ...(validated.data.teacherProfileId
+        ? [
+            notifyClassTeacherAssigned(createdClassId, [
+              validated.data.teacherProfileId,
+            ]),
+          ]
+        : []),
+      ...(validated.data.studentProfileIds.length > 0
+        ? [
+            notifyStudentsEnrolledInClass(
+              createdClassId,
+              validated.data.studentProfileIds
+            ),
+          ]
+        : []),
+      ...(sessionSyncResult.created > 0 || sessionSyncResult.updated > 0
+        ? [notifyClassScheduleChanged(createdClassId)]
+        : []),
+    ])
+
+    for (const result of notificationResults) {
+      if (result.status === "rejected") {
+        console.error("Failed to send class create notification:", result.reason)
+      }
+    }
 
     return NextResponse.json({ class: classData }, { status: 201 })
   } catch (error) {

@@ -8,6 +8,7 @@ import {
 } from "@/lib/media-url"
 import { prisma } from "@/lib/prisma"
 import { deleteStoredDocumentByUrl } from "@/lib/storage/document-storage"
+import { notifyCourseChanged } from "@/lib/notification-service"
 import { z } from "zod"
 
 const updateCourseSchema = z.object({
@@ -173,6 +174,12 @@ export async function PATCH(
       existingCourse.syllabusImageUrl !== course.syllabusImageUrl
     ) {
       await deleteStoredDocumentByUrl(existingCourse.syllabusImageUrl)
+    }
+
+    try {
+      await notifyCourseChanged(course.id, "updated")
+    } catch (notificationError) {
+      console.error("Failed to send course update notifications:", notificationError)
     }
 
     return NextResponse.json({ course })

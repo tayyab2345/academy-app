@@ -15,6 +15,7 @@ import {
 } from "@/lib/media-url"
 import { prisma } from "@/lib/prisma"
 import { deleteStoredDocumentByUrl } from "@/lib/storage/document-storage"
+import { notifyCourseChanged } from "@/lib/notification-service"
 import { z } from "zod"
 
 const createCourseSchema = z.object({
@@ -191,6 +192,12 @@ export async function POST(req: NextRequest) {
         },
       },
     })
+
+    try {
+      await notifyCourseChanged(course.id, "created")
+    } catch (notificationError) {
+      console.error("Failed to send course create notifications:", notificationError)
+    }
 
     return NextResponse.json({ course }, { status: 201 })
   } catch (error) {

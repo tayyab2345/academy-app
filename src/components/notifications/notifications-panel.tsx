@@ -195,7 +195,7 @@ export function NotificationsPanel({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-96 overflow-hidden border border-border bg-popover p-0 text-popover-foreground shadow-xl shadow-black/10"
+        className="w-[calc(100vw-2rem)] max-w-96 overflow-hidden border border-border bg-popover p-0 text-popover-foreground shadow-xl shadow-black/10"
         align="end"
       >
         <div className="flex items-center justify-between border-b p-4">

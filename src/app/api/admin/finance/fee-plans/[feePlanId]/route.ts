@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { isValidCurrency } from "@/lib/currency-utils"
+import { notifyFeePlanChanged } from "@/lib/notification-service"
 
 const updateFeePlanSchema = z.object({
   name: z.string().min(2).optional(),
@@ -117,6 +118,12 @@ export async function PATCH(
         },
       },
     })
+
+    try {
+      await notifyFeePlanChanged(feePlan.id, "updated")
+    } catch (notificationError) {
+      console.error("Failed to send fee plan update notifications:", notificationError)
+    }
 
     return NextResponse.json({ feePlan })
   } catch (error) {
