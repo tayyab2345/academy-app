@@ -1,18 +1,18 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   AlertCircle,
   BookOpen,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Loader2,
   MessageSquare,
   Target,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -56,6 +56,23 @@ export interface ReportAttendanceSession {
   } | null
 }
 
+export interface DailyReportSnapshotSection {
+  id: string
+  sectionType: string
+  content: string | null
+  contentJson: unknown
+  rating: number | null
+  orderIndex: number
+}
+
+export interface DailyReportSnapshot {
+  id: string
+  date: string
+  reportDate: string
+  updatedAt: string
+  sections: DailyReportSnapshotSection[]
+}
+
 export interface ReportAttendanceContext {
   totalSessions: number
   present: number
@@ -63,6 +80,7 @@ export interface ReportAttendanceContext {
   late: number
   excused: number
   sessions: ReportAttendanceSession[]
+  dailyReports?: DailyReportSnapshot[]
 }
 
 export interface DayReportAttendanceSnapshot {
@@ -84,6 +102,8 @@ export interface DayReportEntry {
   performance: string
   behavior: string
   teacherNote: string
+  sourceDailyReportId?: string | null
+  sourceDailyReportUpdatedAt?: string | null
 }
 
 export interface WeeklyFocus {
@@ -338,14 +358,24 @@ export function DayBasedReportBuilder({
     const existingEntries = new Map(
       value.dailyEntries.map((entry) => [entry.date, entry])
     )
-    const nextEntries = value.selectedDays.map((date) =>
-      normalizeDailyEntry({
-        ...existingEntries.get(date),
+    const nextEntries = value.selectedDays.map((date) => {
+      const existingEntry = existingEntries.get(date)
+      const dailyReport = resolveDailyReportForDate(attendanceContext, date)
+      const shouldHydrateFromDailyReport =
+        dailyReport &&
+        (existingEntry?.sourceDailyReportId !== dailyReport.id ||
+          existingEntry?.sourceDailyReportUpdatedAt !== dailyReport.updatedAt)
+
+      return normalizeDailyEntry({
+        ...existingEntry,
+        ...(shouldHydrateFromDailyReport
+          ? buildEntryFromDailyReport(dailyReport)
+          : {}),
         date,
         dayName: getDayName(date),
         attendance: resolveAttendanceForDate(attendanceContext, date),
       })
-    )
+    })
 
     const nextWeeklySummaries =
       reportType === "monthly"
@@ -534,7 +564,7 @@ export function DayBasedReportBuilder({
               </p>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-2 lg:grid-cols-2">
               {value.dailyEntries.map((entry) => (
                 <DailyEntryCard
                   key={entry.date}
@@ -570,67 +600,107 @@ function DailyEntryCard({
     updates: Partial<Omit<DayReportEntry, "date" | "dayName" | "attendance">>
   ) => void
 }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const summary =
+    entry.taughtToday.trim() ||
+    entry.homework.trim() ||
+    entry.performance.trim() ||
+    entry.teacherNote.trim() ||
+    "No daily notes added yet"
+
   return (
-    <Card className="bg-background">
-      <CardHeader className="pb-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+    <Card className="overflow-hidden bg-background">
+      <button
+        type="button"
+        className="flex w-full flex-col gap-3 p-4 text-left transition hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base">{entry.dayName}</CardTitle>
             <CardDescription>{formatDisplayDate(entry.date)}</CardDescription>
+            {entry.sourceDailyReportId && (
+              <Badge
+                variant="outline"
+                className="border-emerald-200 bg-emerald-50 text-[11px] text-emerald-700"
+              >
+                Synced daily
+              </Badge>
+            )}
           </div>
-          <AttendanceStatusBadge attendance={entry.attendance} />
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {summary}
+          </p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {entry.attendance?.startTime && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            {formatTime(entry.attendance.startTime)}
-            {entry.attendance.endTime
-              ? ` - ${formatTime(entry.attendance.endTime)}`
-              : ""}
-            {entry.attendance.sessionCount > 1
-              ? ` (${entry.attendance.sessionCount} sessions)`
-              : ""}
-          </div>
-        )}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <AttendanceStatusBadge attendance={entry.attendance} />
+          <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            {isOpen ? "Hide" : "Expand"}
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform ${
+                isOpen ? "rotate-180" : ""
+              }`}
+            />
+          </span>
+        </div>
+      </button>
 
-        <TextareaField
-          label="What was taught today?"
-          value={entry.taughtToday}
-          disabled={disabled}
-          placeholder="Lesson topics, surah/ayah covered, concepts explained..."
-          onChange={(taughtToday) => onChange({ taughtToday })}
-        />
-        <TextareaField
-          label="Homework / lesson work"
-          value={entry.homework}
-          disabled={disabled}
-          placeholder="Homework assigned, lesson practice, memorization work..."
-          onChange={(homework) => onChange({ homework })}
-        />
-        <TextareaField
-          label="Student performance"
-          value={entry.performance}
-          disabled={disabled}
-          placeholder="Accuracy, confidence, fluency, understanding..."
-          onChange={(performance) => onChange({ performance })}
-        />
-        <TextareaField
-          label="Behavior / participation"
-          value={entry.behavior}
-          disabled={disabled}
-          placeholder="Participation, focus, attitude, discipline..."
-          onChange={(behavior) => onChange({ behavior })}
-        />
-        <TextareaField
-          label="Teacher note for this day"
-          value={entry.teacherNote}
-          disabled={disabled}
-          placeholder="Any extra note for student or parent..."
-          onChange={(teacherNote) => onChange({ teacherNote })}
-        />
-      </CardContent>
+      {isOpen && (
+        <CardContent className="space-y-4 border-t bg-muted/10 p-4">
+          {entry.attendance?.startTime && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-background px-3 py-2 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              {formatTime(entry.attendance.startTime)}
+              {entry.attendance.endTime
+                ? ` - ${formatTime(entry.attendance.endTime)}`
+                : ""}
+              {entry.attendance.sessionCount > 1
+                ? ` (${entry.attendance.sessionCount} sessions)`
+                : ""}
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextareaField
+              label="What was taught today?"
+              value={entry.taughtToday}
+              disabled={disabled}
+              placeholder="Lesson topics, surah/ayah covered, concepts explained..."
+              onChange={(taughtToday) => onChange({ taughtToday })}
+            />
+            <TextareaField
+              label="Homework / lesson work"
+              value={entry.homework}
+              disabled={disabled}
+              placeholder="Homework assigned, lesson practice, memorization work..."
+              onChange={(homework) => onChange({ homework })}
+            />
+            <TextareaField
+              label="Student performance"
+              value={entry.performance}
+              disabled={disabled}
+              placeholder="Accuracy, confidence, fluency, understanding..."
+              onChange={(performance) => onChange({ performance })}
+            />
+            <TextareaField
+              label="Behavior / participation"
+              value={entry.behavior}
+              disabled={disabled}
+              placeholder="Participation, focus, attitude, discipline..."
+              onChange={(behavior) => onChange({ behavior })}
+            />
+            <div className="md:col-span-2">
+              <TextareaField
+                label="Teacher note for this day"
+                value={entry.teacherNote}
+                disabled={disabled}
+                placeholder="Any extra note for student or parent..."
+                onChange={(teacherNote) => onChange({ teacherNote })}
+              />
+            </div>
+          </div>
+        </CardContent>
+      )}
     </Card>
   )
 }
@@ -884,6 +954,39 @@ function normalizeDailyEntry(input: Partial<DayReportEntry>): DayReportEntry {
     performance: input.performance || "",
     behavior: input.behavior || "",
     teacherNote: input.teacherNote || "",
+    sourceDailyReportId: input.sourceDailyReportId ?? null,
+    sourceDailyReportUpdatedAt: input.sourceDailyReportUpdatedAt ?? null,
+  }
+}
+
+function resolveDailyReportForDate(
+  attendanceContext: ReportAttendanceContext | null,
+  date: string
+) {
+  return attendanceContext?.dailyReports?.find((report) => report.date === date) ?? null
+}
+
+function buildEntryFromDailyReport(report: DailyReportSnapshot): Partial<DayReportEntry> {
+  const sectionContent = (sectionType: string) =>
+    report.sections
+      .find((section) => section.sectionType === sectionType)
+      ?.content?.trim() || ""
+
+  const strengths = sectionContent("strengths")
+  const improvements = sectionContent("improvements")
+  const performance = [strengths, improvements].filter(Boolean).join("\n\n")
+
+  return {
+    sourceDailyReportId: report.id,
+    sourceDailyReportUpdatedAt: report.updatedAt,
+    taughtToday:
+      sectionContent("grades") ||
+      sectionContent("teacher_remarks") ||
+      sectionContent("next_focus"),
+    homework: sectionContent("homework"),
+    performance,
+    behavior: sectionContent("behavior"),
+    teacherNote: sectionContent("teacher_remarks") || sectionContent("next_focus"),
   }
 }
 

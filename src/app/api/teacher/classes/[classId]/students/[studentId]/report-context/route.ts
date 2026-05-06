@@ -135,6 +135,50 @@ export async function GET(
       },
     })
 
+    const dailyReports = dateRange
+      ? await prisma.report.findMany({
+          where: {
+            classId: params.classId,
+            studentProfileId: params.studentId,
+            teacherProfileId: teacherProfile.id,
+            reportType: "daily",
+            reportDate: dateRange,
+          },
+          orderBy: {
+            updatedAt: "desc",
+          },
+          include: {
+            sections: {
+              orderBy: {
+                orderIndex: "asc",
+              },
+              select: {
+                id: true,
+                sectionType: true,
+                content: true,
+                contentJson: true,
+                rating: true,
+                orderIndex: true,
+              },
+            },
+          },
+        })
+      : []
+
+    const uniqueDailyReports = Array.from(
+      dailyReports
+        .reduce((reportsByDate, report) => {
+          const dateKey = toDateKey(report.reportDate)
+
+          if (!reportsByDate.has(dateKey)) {
+            reportsByDate.set(dateKey, report)
+          }
+
+          return reportsByDate
+        }, new Map<string, (typeof dailyReports)[number]>())
+        .values()
+    ).sort((left, right) => left.reportDate.getTime() - right.reportDate.getTime())
+
     const student = await prisma.studentProfile.findUnique({
       where: { id: params.studentId },
       include: {
@@ -184,6 +228,20 @@ export async function GET(
               : null,
           }
         }),
+        dailyReports: uniqueDailyReports.map((report) => ({
+          id: report.id,
+          date: toDateKey(report.reportDate),
+          reportDate: report.reportDate.toISOString(),
+          updatedAt: report.updatedAt.toISOString(),
+          sections: report.sections.map((section) => ({
+            id: section.id,
+            sectionType: section.sectionType,
+            content: section.content,
+            contentJson: section.contentJson,
+            rating: section.rating,
+            orderIndex: section.orderIndex,
+          })),
+        })),
       },
       recentSessions: sessionsInPeriod.slice(-5).map((session) => ({
         id: session.id,

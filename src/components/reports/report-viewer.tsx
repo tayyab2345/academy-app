@@ -238,33 +238,64 @@ export function ReportViewer({
     )
   }
 
-  const renderDailyEntry = (entry: DayReportEntry) => (
-    <Card key={entry.date} className="bg-muted/20">
-      <CardHeader className="pb-2">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle className="text-base">{entry.dayName}</CardTitle>
-            <CardDescription>
-              {new Date(`${entry.date}T00:00:00`).toLocaleDateString()}
-            </CardDescription>
+  const renderDailyEntry = (entry: DayReportEntry) => {
+    const summary =
+      entry.taughtToday?.trim() ||
+      entry.homework?.trim() ||
+      entry.performance?.trim() ||
+      entry.teacherNote?.trim() ||
+      "No daily notes added"
+
+    return (
+      <details
+        key={entry.date}
+        className="group overflow-hidden rounded-xl border bg-muted/10"
+      >
+        <summary className="flex cursor-pointer list-none flex-col gap-2 p-3 transition hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold">{entry.dayName || "Day"}</p>
+              <span className="text-xs text-muted-foreground">
+                {entry.date
+                  ? new Date(`${entry.date}T00:00:00`).toLocaleDateString()
+                  : "No date"}
+              </span>
+            </div>
+            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+              {summary}
+            </p>
           </div>
-          <AttendanceStatusBadge attendance={entry.attendance} />
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <AttendanceStatusBadge attendance={entry.attendance} />
+            <span className="rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <span className="group-open:hidden">Expand</span>
+              <span className="hidden group-open:inline">Hide</span>
+            </span>
+          </div>
+        </summary>
+        <div className="grid gap-3 border-t bg-background p-3 text-sm md:grid-cols-2">
+          <ReportTextBlock label="What was taught" value={entry.taughtToday} />
+          <ReportTextBlock label="Homework / lesson work" value={entry.homework} />
+          <ReportTextBlock label="Student performance" value={entry.performance} />
+          <ReportTextBlock label="Behavior / participation" value={entry.behavior} />
+          <div className="md:col-span-2">
+            <ReportTextBlock label="Teacher note" value={entry.teacherNote} />
+          </div>
         </div>
-      </CardHeader>
-      <CardContent className="grid gap-3 text-sm md:grid-cols-2">
-        <ReportTextBlock label="What was taught" value={entry.taughtToday} />
-        <ReportTextBlock label="Homework / lesson work" value={entry.homework} />
-        <ReportTextBlock label="Student performance" value={entry.performance} />
-        <ReportTextBlock label="Behavior / participation" value={entry.behavior} />
-        <div className="md:col-span-2">
-          <ReportTextBlock label="Teacher note" value={entry.teacherNote} />
-        </div>
-      </CardContent>
-    </Card>
-  )
+      </details>
+    )
+  }
 
   const renderDayBasedReportSection = (section: ReportSection) => {
     const data = section.contentJson as StructuredDayReportData
+    const dailyEntries = Array.isArray(data.dailyEntries) ? data.dailyEntries : []
+    const monthlyWeeklySummaries = Array.isArray(data.monthlyWeeklySummaries)
+      ? data.monthlyWeeklySummaries
+      : []
+    const monthlySummary: Partial<StructuredDayReportData["monthlySummary"]> =
+      data.monthlySummary ?? {}
+    const nextWeekFocus: Partial<StructuredDayReportData["nextWeekFocus"]> =
+      data.nextWeekFocus ?? {}
 
     return (
       <div className="space-y-4">
@@ -282,35 +313,35 @@ export function ReportViewer({
           <div className="grid gap-3 md:grid-cols-2">
             <ReportTextBlock
               label="Lessons covered"
-              value={data.monthlySummary.lessonsCovered}
+              value={monthlySummary.lessonsCovered}
             />
             <ReportTextBlock
               label="Homework completion"
-              value={data.monthlySummary.homeworkCompletion}
+              value={monthlySummary.homeworkCompletion}
             />
-            <ReportTextBlock label="Strengths" value={data.monthlySummary.strengths} />
+            <ReportTextBlock label="Strengths" value={monthlySummary.strengths} />
             <ReportTextBlock
               label="Areas for improvement"
-              value={data.monthlySummary.areasForImprovement}
+              value={monthlySummary.areasForImprovement}
             />
             <ReportTextBlock
               label="Next month focus"
-              value={data.monthlySummary.nextMonthFocus}
+              value={monthlySummary.nextMonthFocus}
             />
             <ReportTextBlock
               label="Teacher remarks"
-              value={data.monthlySummary.teacherRemarks}
+              value={monthlySummary.teacherRemarks}
             />
           </div>
         )}
 
         {data.reportType === "monthly" &&
-          data.monthlyWeeklySummaries.some((week) => week.summary.trim()) && (
+          monthlyWeeklySummaries.some((week) => week.summary?.trim()) && (
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">Weekly summaries</h4>
               <div className="grid gap-3 md:grid-cols-2">
-                {data.monthlyWeeklySummaries
-                  .filter((week) => week.summary.trim())
+                {monthlyWeeklySummaries
+                  .filter((week) => week.summary?.trim())
                   .map((week) => (
                     <ReportTextBlock
                       key={week.id}
@@ -322,11 +353,11 @@ export function ReportViewer({
             </div>
           )}
 
-        {data.dailyEntries.length > 0 && (
+        {dailyEntries.length > 0 && (
           <div className="space-y-3">
             <h4 className="text-sm font-semibold">Daily entries</h4>
-            <div className="grid gap-3 xl:grid-cols-2">
-              {data.dailyEntries.map(renderDailyEntry)}
+            <div className="grid gap-2 xl:grid-cols-2">
+              {dailyEntries.map(renderDailyEntry)}
             </div>
           </div>
         )}
@@ -340,19 +371,19 @@ export function ReportViewer({
             <div className="grid gap-3 md:grid-cols-2">
               <ReportTextBlock
                 label="What will be taught"
-                value={data.nextWeekFocus.whatWillBeTaught}
+                value={nextWeekFocus.whatWillBeTaught}
               />
               <ReportTextBlock
                 label="Areas to improve"
-                value={data.nextWeekFocus.areasToImprove}
+                value={nextWeekFocus.areasToImprove}
               />
               <ReportTextBlock
                 label="Homework / follow-up"
-                value={data.nextWeekFocus.homeworkFollowUp}
+                value={nextWeekFocus.homeworkFollowUp}
               />
               <ReportTextBlock
                 label="Teacher remarks"
-                value={data.nextWeekFocus.teacherRemarks}
+                value={nextWeekFocus.teacherRemarks}
               />
             </div>
           </div>

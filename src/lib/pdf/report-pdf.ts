@@ -201,8 +201,24 @@ function renderAttendanceStats(attendance: AttendanceSummary) {
 }
 
 function renderStructuredDayReport(data: StructuredDayReportData) {
-  const dailyEntries = data.dailyEntries ?? []
-  const monthlyWeeklySummaries = data.monthlyWeeklySummaries ?? []
+  const dailyEntries = Array.isArray(data.dailyEntries) ? data.dailyEntries : []
+  const monthlyWeeklySummaries = Array.isArray(data.monthlyWeeklySummaries)
+    ? data.monthlyWeeklySummaries
+    : []
+  const monthlySummary = data.monthlySummary ?? {
+    lessonsCovered: "",
+    homeworkCompletion: "",
+    strengths: "",
+    areasForImprovement: "",
+    nextMonthFocus: "",
+    teacherRemarks: "",
+  }
+  const nextWeekFocus = data.nextWeekFocus ?? {
+    whatWillBeTaught: "",
+    areasToImprove: "",
+    homeworkFollowUp: "",
+    teacherRemarks: "",
+  }
 
   return `
     ${data.attendanceSummary ? renderAttendanceStats(data.attendanceSummary) : ""}
@@ -211,20 +227,20 @@ function renderStructuredDayReport(data: StructuredDayReportData) {
       data.reportType === "monthly"
         ? `
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px;">
-        ${renderSmallTextBlock("Lessons covered", data.monthlySummary?.lessonsCovered)}
-        ${renderSmallTextBlock("Homework completion", data.monthlySummary?.homeworkCompletion)}
-        ${renderSmallTextBlock("Strengths", data.monthlySummary?.strengths)}
-        ${renderSmallTextBlock("Areas for improvement", data.monthlySummary?.areasForImprovement)}
-        ${renderSmallTextBlock("Next month focus", data.monthlySummary?.nextMonthFocus)}
-        ${renderSmallTextBlock("Teacher remarks", data.monthlySummary?.teacherRemarks)}
+        ${renderSmallTextBlock("Lessons covered", monthlySummary.lessonsCovered)}
+        ${renderSmallTextBlock("Homework completion", monthlySummary.homeworkCompletion)}
+        ${renderSmallTextBlock("Strengths", monthlySummary.strengths)}
+        ${renderSmallTextBlock("Areas for improvement", monthlySummary.areasForImprovement)}
+        ${renderSmallTextBlock("Next month focus", monthlySummary.nextMonthFocus)}
+        ${renderSmallTextBlock("Teacher remarks", monthlySummary.teacherRemarks)}
       </div>
       ${
-        monthlyWeeklySummaries.some((week) => week.summary?.trim())
+        monthlyWeeklySummaries.some((week) => week?.summary?.trim())
           ? `
         <h4 style="font-size: 15px; margin: 12px 0 8px;">Weekly summaries</h4>
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px;">
           ${monthlyWeeklySummaries
-            .filter((week) => week.summary?.trim())
+            .filter((week) => week?.summary?.trim())
             .map((week) =>
               renderSmallTextBlock(
                 `${week.label}: ${week.periodStart} - ${week.periodEnd}`,
@@ -250,25 +266,25 @@ function renderStructuredDayReport(data: StructuredDayReportData) {
         <div style="border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; margin-bottom: 12px; page-break-inside: avoid;">
           <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
             <div>
-              <div style="font-size: 16px; font-weight: 700;">${escapeHtml(entry.dayName || "")}</div>
-              <div style="font-size: 12px; color: #6b7280;">${escapeHtml(entry.date || "")}</div>
+              <div style="font-size: 16px; font-weight: 700;">${escapeHtml(entry?.dayName || "Day")}</div>
+              <div style="font-size: 12px; color: #6b7280;">${escapeHtml(entry?.date || "")}</div>
             </div>
             <div style="font-size: 12px; font-weight: 700; color: #047857;">
-              ${escapeHtml(entry.attendance?.label || "No attendance record")}
+              ${escapeHtml(entry?.attendance?.label || "No attendance record")}
               ${
-                entry.attendance?.lateMinutes
+                entry?.attendance?.lateMinutes
                   ? ` (${entry.attendance.lateMinutes} min late)`
                   : ""
               }
             </div>
           </div>
           <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-            ${renderSmallTextBlock("What was taught", entry.taughtToday)}
-            ${renderSmallTextBlock("Homework / lesson work", entry.homework)}
-            ${renderSmallTextBlock("Student performance", entry.performance)}
-            ${renderSmallTextBlock("Behavior / participation", entry.behavior)}
+            ${renderSmallTextBlock("What was taught", entry?.taughtToday)}
+            ${renderSmallTextBlock("Homework / lesson work", entry?.homework)}
+            ${renderSmallTextBlock("Student performance", entry?.performance)}
+            ${renderSmallTextBlock("Behavior / participation", entry?.behavior)}
             <div style="grid-column: 1 / -1;">
-              ${renderSmallTextBlock("Teacher note", entry.teacherNote)}
+              ${renderSmallTextBlock("Teacher note", entry?.teacherNote)}
             </div>
           </div>
         </div>
@@ -284,10 +300,10 @@ function renderStructuredDayReport(data: StructuredDayReportData) {
         ? `
       <h4 style="font-size: 15px; margin: 12px 0 8px;">Next week focus</h4>
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-        ${renderSmallTextBlock("What will be taught", data.nextWeekFocus?.whatWillBeTaught)}
-        ${renderSmallTextBlock("Areas to improve", data.nextWeekFocus?.areasToImprove)}
-        ${renderSmallTextBlock("Homework / follow-up", data.nextWeekFocus?.homeworkFollowUp)}
-        ${renderSmallTextBlock("Teacher remarks", data.nextWeekFocus?.teacherRemarks)}
+        ${renderSmallTextBlock("What will be taught", nextWeekFocus.whatWillBeTaught)}
+        ${renderSmallTextBlock("Areas to improve", nextWeekFocus.areasToImprove)}
+        ${renderSmallTextBlock("Homework / follow-up", nextWeekFocus.homeworkFollowUp)}
+        ${renderSmallTextBlock("Teacher remarks", nextWeekFocus.teacherRemarks)}
       </div>
     `
         : ""
