@@ -1,22 +1,29 @@
 import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
-import { getRoleRedirectPath } from "@/lib/role-redirect"
+import {
+  getRoleRedirectPath,
+  hasUsableDashboardIdentity,
+} from "@/lib/role-redirect"
 
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token
     const path = req.nextUrl.pathname
+    const isDashboardPath =
+      path.startsWith("/admin") ||
+      path.startsWith("/teacher") ||
+      path.startsWith("/student") ||
+      path.startsWith("/parent") ||
+      path.startsWith("/notifications")
+    const hasDashboardIdentity = hasUsableDashboardIdentity(token)
     const academyIsDeleted = token?.academy?.isDeleted === true
 
     if (
       token &&
+      hasDashboardIdentity &&
       academyIsDeleted &&
       (path === "/" ||
-        path.startsWith("/admin") ||
-        path.startsWith("/teacher") ||
-        path.startsWith("/student") ||
-        path.startsWith("/parent") ||
-        path.startsWith("/notifications") ||
+        isDashboardPath ||
         path.startsWith("/login") ||
         path.startsWith("/register"))
     ) {
@@ -24,33 +31,25 @@ export default withAuth(
     }
 
     // Redirect authenticated users away from public/auth pages before they render.
-    if (token && path === "/") {
-      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role as string | undefined), req.url))
+    if (token && hasDashboardIdentity && path === "/") {
+      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role), req.url))
     }
 
-    if (token && path.startsWith("/login")) {
-      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role as string | undefined), req.url))
+    if (token && hasDashboardIdentity && path.startsWith("/login")) {
+      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role), req.url))
     }
 
-    if (token && path.startsWith("/register")) {
-      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role as string | undefined), req.url))
+    if (token && hasDashboardIdentity && path.startsWith("/register")) {
+      return NextResponse.redirect(new URL(getRoleRedirectPath(token.role), req.url))
     }
 
     // Protect dashboard routes
-    if (!token && path.startsWith("/admin")) {
+    if (!token && isDashboardPath) {
       return NextResponse.redirect(new URL("/login", req.url))
     }
 
-    if (!token && path.startsWith("/teacher")) {
-      return NextResponse.redirect(new URL("/login", req.url))
-    }
-
-    if (!token && path.startsWith("/student")) {
-      return NextResponse.redirect(new URL("/login", req.url))
-    }
-
-    if (!token && path.startsWith("/parent")) {
-      return NextResponse.redirect(new URL("/login", req.url))
+    if (token && !hasDashboardIdentity && isDashboardPath) {
+      return NextResponse.redirect(new URL("/login?auth=retry", req.url))
     }
 
     return NextResponse.next()

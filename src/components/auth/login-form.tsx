@@ -36,6 +36,10 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { AcademyLogo } from "@/components/ui/academy-logo"
+import {
+  getRoleRedirectPath,
+  hasUsableDashboardIdentity,
+} from "@/lib/role-redirect"
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -43,6 +47,13 @@ const formSchema = z.object({
 })
 
 type FormValues = z.infer<typeof formSchema>
+type SessionIdentityResponse = {
+  user?: {
+    id?: unknown
+    role?: unknown
+    academyId?: unknown
+  }
+}
 
 export function LoginForm() {
   const router = useRouter()
@@ -55,6 +66,7 @@ export function LoginForm() {
   const callbackUrl = searchParams.get("callbackUrl") || "/"
   const registered = searchParams.get("registered")
   const notice = searchParams.get("notice")
+  const authRetry = searchParams.get("auth") === "retry"
   const assignedSubdomain = searchParams.get("subdomain")
 
   const form = useForm<FormValues>({
@@ -116,7 +128,10 @@ export function LoginForm() {
           window.localStorage.removeItem("academyflow-remembered-email")
         }
 
-        let destination = callbackUrl
+        let destination =
+          callbackUrl.startsWith("/login") || callbackUrl.startsWith("/register")
+            ? "/"
+            : callbackUrl
 
         if (result.url) {
           const resolvedUrl = new URL(result.url, window.location.origin)
@@ -127,6 +142,18 @@ export function LoginForm() {
           }
 
           destination = `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`
+        }
+
+        const readyUser = await waitForDashboardSessionIdentity()
+
+        if (!readyUser) {
+          setError("Your secure session is still preparing. Please try again in a moment.")
+          setIsLoading(false)
+          return
+        }
+
+        if (destination === "/" || destination.startsWith("/login") || destination.startsWith("/register")) {
+          destination = getRoleRedirectPath(readyUser.role)
         }
 
         router.replace(destination)
@@ -175,6 +202,12 @@ export function LoginForm() {
           {notice && (
             <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
               {notice}
+            </div>
+          )}
+
+          {authRetry && !notice && (
+            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+              Your secure session was not ready yet. Please sign in again.
             </div>
           )}
 
@@ -301,4 +334,28 @@ export function LoginForm() {
       </CardContent>
     </Card>
   )
+}
+
+async function waitForDashboardSessionIdentity() {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      const response = await fetch("/api/auth/session", {
+        cache: "no-store",
+      })
+
+      if (response.ok) {
+        const data = (await response.json()) as SessionIdentityResponse
+
+        if (hasUsableDashboardIdentity(data.user)) {
+          return data.user
+        }
+      }
+    } catch (error) {
+      console.warn("[login] session readiness check failed", error)
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+
+  return null
 }

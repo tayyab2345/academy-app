@@ -13,9 +13,18 @@ export default async function DashboardLayout({
   const session = await getServerSession(authOptions)
   const { session: activeSession } = await requireActiveDashboardSession(session)
 
-  const unreadNotificationCount = await getUnreadNotificationCount(
-    activeSession.user.id
-  )
+  let unreadNotificationCount = 0
+
+  try {
+    unreadNotificationCount = await getUnreadNotificationCount(
+      activeSession.user.id
+    )
+  } catch (error) {
+    console.error("[dashboard-layout] unread notification count failed", {
+      userId: activeSession.user.id,
+      error,
+    })
+  }
 
   return (
     <Providers session={activeSession}>
