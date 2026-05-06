@@ -19,6 +19,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import {
   Form,
   FormControl,
@@ -27,8 +28,14 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { Card, CardContent } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { AcademyLogo } from "@/components/ui/academy-logo"
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -132,35 +139,33 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="mx-auto w-full max-w-[860px] overflow-hidden rounded-[2rem] border border-white/70 bg-white/68 shadow-[0_30px_80px_-32px_rgba(79,70,229,0.3)] backdrop-blur-2xl">
-      <CardContent className="p-5 sm:p-8 lg:p-12">
-        <div className="mx-auto max-w-xl">
-          <div className="mb-8 flex items-center justify-center gap-4 text-center sm:mb-10">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(145deg,#34d399_0%,#4f46e5_100%)] p-2.5 shadow-[0_20px_40px_-20px_rgba(79,70,229,0.6)]">
-              <img
-                src="/icons/app-icon.svg"
-                alt="AcademyFlow"
-                className="h-full w-full rounded-xl object-contain"
-              />
-            </div>
-            <div className="text-left">
-              <p className="text-3xl font-bold tracking-tight text-slate-950 sm:text-[2.2rem]">
-                AcademyFlow
-              </p>
-            </div>
-          </div>
+    <Card className="mx-auto w-full max-w-md overflow-hidden">
+      <CardHeader className="space-y-5 text-center">
+        <Link href="/" className="mx-auto flex items-center gap-3">
+          <AcademyLogo
+            name="AcademyFlow"
+            primaryColor="#059669"
+            className="h-10 w-10"
+            iconClassName="h-5 w-5"
+          />
+          <span className="text-2xl font-semibold tracking-tight text-foreground">
+            AcademyFlow
+          </span>
+        </Link>
 
-          <div className="mb-8 space-y-3 text-center sm:mb-10">
-            <h1 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-              Welcome back
-            </h1>
-            <p className="text-lg text-slate-500 sm:text-[1.35rem]">
-              Sign in to continue to your academy
-            </p>
-          </div>
+        <div className="space-y-2">
+          <CardTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Welcome back
+          </CardTitle>
+          <CardDescription className="text-sm">
+            Sign in to continue to your academy dashboard
+          </CardDescription>
+        </div>
+      </CardHeader>
 
+      <CardContent>
           {registered && (
-            <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-700 shadow-sm">
+            <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
               Academy created successfully!
               {assignedSubdomain ? ` Assigned subdomain: ${assignedSubdomain}.academyflow.com.` : ""}
               {" "}Please sign in with your admin credentials.
@@ -168,29 +173,29 @@ export function LoginForm() {
           )}
 
           {notice && (
-            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-700 shadow-sm">
+            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
               {notice}
             </div>
           )}
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
                 name="email"
                 render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel className="text-base font-medium text-slate-700">
+                  <FormItem>
+                    <FormLabel>
                       Email address
                     </FormLabel>
                     <FormControl>
-                      <div className="group flex h-16 items-center rounded-[1.35rem] border border-slate-200 bg-white/85 px-5 shadow-[0_14px_35px_-26px_rgba(15,23,42,0.45)] transition-all focus-within:border-indigo-300 focus-within:bg-white focus-within:shadow-[0_20px_45px_-24px_rgba(79,70,229,0.25)]">
-                        <Mail className="mr-4 h-5 w-5 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
-                        <input
+                      <div className="relative">
+                        <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
                           type="email"
                           placeholder="you@example.com"
                           disabled={isLoading}
-                          className="h-full w-full border-0 bg-transparent text-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0"
+                          className="pl-10"
                           {...field}
                         />
                       </div>
@@ -204,23 +209,23 @@ export function LoginForm() {
                 control={form.control}
                 name="password"
                 render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel className="text-base font-medium text-slate-700">
+                  <FormItem>
+                    <FormLabel>
                       Password
                     </FormLabel>
                     <FormControl>
-                      <div className="group flex h-16 items-center rounded-[1.35rem] border border-slate-200 bg-white/85 px-5 shadow-[0_14px_35px_-26px_rgba(15,23,42,0.45)] transition-all focus-within:border-indigo-300 focus-within:bg-white focus-within:shadow-[0_20px_45px_-24px_rgba(79,70,229,0.25)]">
-                        <LockKeyhole className="mr-4 h-5 w-5 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
-                        <input
+                      <div className="relative">
+                        <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
                           type={showPassword ? "text" : "password"}
-                          placeholder="************"
+                          placeholder="Enter your password"
                           disabled={isLoading}
-                          className="h-full w-full border-0 bg-transparent text-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0"
+                          className="pl-10 pr-11"
                           {...field}
                         />
                         <button
                           type="button"
-                          className="ml-3 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                          className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
                           onClick={() => setShowPassword((current) => !current)}
                           aria-label={showPassword ? "Hide password" : "Show password"}
                         >
@@ -238,22 +243,21 @@ export function LoginForm() {
               />
 
               {error && (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50/95 px-4 py-3 text-sm font-medium text-rose-600 shadow-sm">
+                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600">
                   {error}
                 </div>
               )}
 
-              <div className="flex flex-col gap-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                 <label className="flex items-center gap-3">
                   <Checkbox
                     checked={rememberEmail}
                     onCheckedChange={(checked) => setRememberEmail(checked === true)}
-                    className="h-5 w-5 rounded-md border-indigo-300 data-[state=checked]:bg-indigo-500 data-[state=checked]:text-white"
                   />
-                  <span className="text-base text-slate-700">Remember me</span>
+                  <span>Remember me</span>
                 </label>
 
-                <span className="text-base text-indigo-600">
+                <span className="text-primary">
                   Need help? Contact your admin
                 </span>
               </div>
@@ -261,53 +265,39 @@ export function LoginForm() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className={cn(
-                  "h-16 w-full rounded-[1.35rem] border-0 text-xl font-semibold text-white shadow-[0_18px_45px_-20px_rgba(79,70,229,0.55)] transition-transform duration-200 hover:-translate-y-0.5",
-                  "bg-[linear-gradient(90deg,#34d399_0%,#3b82f6_55%,#6366f1_100%)] hover:opacity-95"
-                )}
+                className="w-full"
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Signing in
                   </>
                 ) : (
                   <>
                     <span>Sign in</span>
-                    <ArrowRight className="ml-3 h-5 w-5" />
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </>
                 )}
               </Button>
             </form>
           </Form>
 
-          <div className="mt-8 space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
-                Secure academy access
-              </span>
-              <div className="h-px flex-1 bg-slate-200" />
-            </div>
+          <div className="mt-6 space-y-4 border-t pt-5">
+            <p className="text-center text-sm text-muted-foreground">
+              Don&apos;t have an academy account?{" "}
+              <Link
+                href="/register/academy"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Create academy
+              </Link>
+            </p>
 
-            <div className="rounded-[1.35rem] border border-slate-200 bg-white/70 px-5 py-4 text-center shadow-sm">
-              <p className="text-base text-slate-600">
-                Don&apos;t have an academy account?{" "}
-                <Link
-                  href="/register"
-                  className="font-semibold text-indigo-600 transition hover:text-indigo-700"
-                >
-                  Create academy
-                </Link>
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center gap-3 text-center text-sm text-slate-500">
-              <ShieldCheck className="h-5 w-5 text-indigo-500" />
-              <p>Your data is protected with enterprise-grade security</p>
+            <div className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <p>Secure role-based access for academy teams</p>
             </div>
           </div>
-        </div>
       </CardContent>
     </Card>
   )

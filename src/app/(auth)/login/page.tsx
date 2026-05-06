@@ -9,18 +9,18 @@ export const metadata: Metadata = {
 
 function LoginFormFallback() {
   return (
-    <div className="mx-auto w-full max-w-[860px]">
-      <div className="rounded-[2rem] border border-white/70 bg-white/70 p-6 shadow-[0_30px_80px_-32px_rgba(79,70,229,0.3)] backdrop-blur-xl sm:p-8 lg:p-12">
-        <div className="mx-auto max-w-xl animate-pulse space-y-6">
-          <div className="h-12 w-40 rounded-full bg-slate-200/80" />
+    <div className="mx-auto w-full max-w-md">
+      <div className="rounded-lg border bg-card p-6 shadow-sm sm:p-8">
+        <div className="animate-pulse space-y-6">
+          <div className="mx-auto h-10 w-44 rounded-md bg-muted" />
           <div className="space-y-3">
-            <div className="h-10 w-64 rounded-xl bg-slate-200/80" />
-            <div className="h-6 w-80 rounded-xl bg-slate-200/60" />
+            <div className="mx-auto h-8 w-56 rounded-md bg-muted" />
+            <div className="mx-auto h-4 w-64 rounded-md bg-muted" />
           </div>
           <div className="space-y-4">
-            <div className="h-24 rounded-[1.5rem] bg-slate-100/90" />
-            <div className="h-24 rounded-[1.5rem] bg-slate-100/90" />
-            <div className="h-14 rounded-[1.25rem] bg-slate-200/80" />
+            <div className="h-10 rounded-md bg-muted" />
+            <div className="h-10 rounded-md bg-muted" />
+            <div className="h-10 rounded-md bg-muted" />
           </div>
         </div>
       </div>
@@ -30,7 +30,7 @@ function LoginFormFallback() {
 
 export default function LoginPage() {
   return (
-    <div className="relative flex min-h-[calc(100vh-5rem)] items-center justify-center py-8 sm:py-12">
+    <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center py-8 sm:py-12">
       <div className="w-full">
         <Suspense fallback={<LoginFormFallback />}>
           <LoginForm />
