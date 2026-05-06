@@ -1,6 +1,6 @@
 "use client"
 
-import { User, BookOpen, Clock, Star, Download } from "lucide-react"
+import { User, BookOpen, Clock, Star, Download, Target } from "lucide-react"
 import {
   Card,
   CardContent,
@@ -10,6 +10,12 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ReportStatusBadge } from "./report-status-badge"
+import {
+  AttendanceStatusBadge,
+  DAY_BASED_REPORT_BUILDER_TYPES,
+  DayReportEntry,
+  StructuredDayReportData,
+} from "@/components/teacher/reports/day-based-report-builder"
 
 interface ReportSection {
   id: string
@@ -71,6 +77,62 @@ const reportTypeLabels: Record<string, string> = {
   weekly: "Weekly Report",
   monthly: "Monthly Report",
   term: "Term Report",
+}
+
+function ReportTextBlock({
+  label,
+  value,
+}: {
+  label: string
+  value: string | null | undefined
+}) {
+  return (
+    <div className="rounded-lg border bg-background p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 whitespace-pre-wrap text-sm">
+        {value?.trim() || "Not added"}
+      </p>
+    </div>
+  )
+}
+
+function SummaryStat({
+  label,
+  value,
+  tone = "muted",
+}: {
+  label: string
+  value: number
+  tone?: "muted" | "green" | "yellow" | "red" | "blue"
+}) {
+  const toneClasses = {
+    muted: "bg-muted text-foreground",
+    green: "bg-green-50 text-green-700",
+    yellow: "bg-yellow-50 text-yellow-700",
+    red: "bg-red-50 text-red-700",
+    blue: "bg-blue-50 text-blue-700",
+  }
+
+  return (
+    <div className={`rounded-lg p-3 text-center ${toneClasses[tone]}`}>
+      <p className="text-2xl font-bold">{value || 0}</p>
+      <p className="text-xs opacity-80">{label}</p>
+    </div>
+  )
+}
+
+function isStructuredDayReportData(value: unknown): value is StructuredDayReportData {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    DAY_BASED_REPORT_BUILDER_TYPES.includes(
+      (value as { builderType?: StructuredDayReportData["builderType"] })
+        .builderType as StructuredDayReportData["builderType"]
+    )
+  )
 }
 
 export function ReportViewer({
@@ -176,7 +238,134 @@ export function ReportViewer({
     )
   }
 
+  const renderDailyEntry = (entry: DayReportEntry) => (
+    <Card key={entry.date} className="bg-muted/20">
+      <CardHeader className="pb-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-base">{entry.dayName}</CardTitle>
+            <CardDescription>
+              {new Date(`${entry.date}T00:00:00`).toLocaleDateString()}
+            </CardDescription>
+          </div>
+          <AttendanceStatusBadge attendance={entry.attendance} />
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm md:grid-cols-2">
+        <ReportTextBlock label="What was taught" value={entry.taughtToday} />
+        <ReportTextBlock label="Homework / lesson work" value={entry.homework} />
+        <ReportTextBlock label="Student performance" value={entry.performance} />
+        <ReportTextBlock label="Behavior / participation" value={entry.behavior} />
+        <div className="md:col-span-2">
+          <ReportTextBlock label="Teacher note" value={entry.teacherNote} />
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  const renderDayBasedReportSection = (section: ReportSection) => {
+    const data = section.contentJson as StructuredDayReportData
+
+    return (
+      <div className="space-y-4">
+        {data.attendanceSummary && (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <SummaryStat label="Sessions" value={data.attendanceSummary.totalSessions} />
+            <SummaryStat label="Present" value={data.attendanceSummary.present} tone="green" />
+            <SummaryStat label="Late" value={data.attendanceSummary.late} tone="yellow" />
+            <SummaryStat label="Absent" value={data.attendanceSummary.absent} tone="red" />
+            <SummaryStat label="Excused" value={data.attendanceSummary.excused} tone="blue" />
+          </div>
+        )}
+
+        {data.reportType === "monthly" && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <ReportTextBlock
+              label="Lessons covered"
+              value={data.monthlySummary.lessonsCovered}
+            />
+            <ReportTextBlock
+              label="Homework completion"
+              value={data.monthlySummary.homeworkCompletion}
+            />
+            <ReportTextBlock label="Strengths" value={data.monthlySummary.strengths} />
+            <ReportTextBlock
+              label="Areas for improvement"
+              value={data.monthlySummary.areasForImprovement}
+            />
+            <ReportTextBlock
+              label="Next month focus"
+              value={data.monthlySummary.nextMonthFocus}
+            />
+            <ReportTextBlock
+              label="Teacher remarks"
+              value={data.monthlySummary.teacherRemarks}
+            />
+          </div>
+        )}
+
+        {data.reportType === "monthly" &&
+          data.monthlyWeeklySummaries.some((week) => week.summary.trim()) && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Weekly summaries</h4>
+              <div className="grid gap-3 md:grid-cols-2">
+                {data.monthlyWeeklySummaries
+                  .filter((week) => week.summary.trim())
+                  .map((week) => (
+                    <ReportTextBlock
+                      key={week.id}
+                      label={`${week.label}: ${week.periodStart} - ${week.periodEnd}`}
+                      value={week.summary}
+                    />
+                  ))}
+              </div>
+            </div>
+          )}
+
+        {data.dailyEntries.length > 0 && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold">Daily entries</h4>
+            <div className="grid gap-3 xl:grid-cols-2">
+              {data.dailyEntries.map(renderDailyEntry)}
+            </div>
+          </div>
+        )}
+
+        {data.reportType === "weekly" && (
+          <div className="rounded-lg border bg-muted/20 p-4">
+            <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Target className="h-4 w-4 text-emerald-600" />
+              Next week focus
+            </h4>
+            <div className="grid gap-3 md:grid-cols-2">
+              <ReportTextBlock
+                label="What will be taught"
+                value={data.nextWeekFocus.whatWillBeTaught}
+              />
+              <ReportTextBlock
+                label="Areas to improve"
+                value={data.nextWeekFocus.areasToImprove}
+              />
+              <ReportTextBlock
+                label="Homework / follow-up"
+                value={data.nextWeekFocus.homeworkFollowUp}
+              />
+              <ReportTextBlock
+                label="Teacher remarks"
+                value={data.nextWeekFocus.teacherRemarks}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const renderSection = (section: ReportSection) => {
+    if (isStructuredDayReportData(section.contentJson)) {
+      return renderDayBasedReportSection(section)
+    }
+
     if (section.sectionType === "attendance") {
       return renderAttendanceSection(section)
     }
@@ -273,7 +462,12 @@ export function ReportViewer({
               <Card key={section.id}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">
-                    {sectionTypeLabels[section.sectionType] || section.sectionType}
+                    {isStructuredDayReportData(section.contentJson)
+                      ? section.contentJson.reportType === "weekly"
+                        ? "Weekly Day-Based Report"
+                        : "Monthly Report Builder"
+                      : sectionTypeLabels[section.sectionType] ||
+                        section.sectionType}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>{renderSection(section)}</CardContent>

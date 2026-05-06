@@ -32,6 +32,15 @@ import {
 } from "@/components/ui/select"
 import { ReportSectionsEditor, ReportSection } from "./report-sections-editor"
 import { PublishReportDialog } from "./publish-report-dialog"
+import {
+  buildDayBasedReportSection,
+  createDefaultDayBasedReportData,
+  DayBasedReportBuilder,
+  getDefaultReportPeriod,
+  isDayBasedReportSection,
+  ReportAttendanceContext,
+  StructuredDayReportData,
+} from "./day-based-report-builder"
 
 const reportTypes = [
   { value: "daily", label: "Daily Report" },
@@ -90,10 +99,24 @@ export function ReportForm({
   const [students, setStudents] = useState<Student[]>([])
   const [isLoadingClasses, setIsLoadingClasses] = useState(true)
   const [isLoadingStudents, setIsLoadingStudents] = useState(false)
-  const [sections, setSections] = useState<ReportSection[]>(
-    initialData?.sections || []
+  const initialDayBasedSection = initialData?.sections?.find(
+    isDayBasedReportSection
   )
-  const [attendanceContext, setAttendanceContext] = useState<any>(null)
+  const [sections, setSections] = useState<ReportSection[]>(
+    (initialData?.sections || []).filter(
+      (section) => !isDayBasedReportSection(section)
+    )
+  )
+  const [dayBasedReport, setDayBasedReport] = useState<StructuredDayReportData>(
+    () =>
+      createDefaultDayBasedReportData(
+        (initialData?.reportType === "monthly" ? "monthly" : "weekly"),
+        initialDayBasedSection?.contentJson
+      )
+  )
+  const [attendanceContext, setAttendanceContext] =
+    useState<ReportAttendanceContext | null>(null)
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
 
   const formatDateForInput = (date: string | Date | undefined) => {
@@ -120,8 +143,11 @@ export function ReportForm({
 
   const selectedClassId = form.watch("classId")
   const selectedStudentId = form.watch("studentProfileId")
+  const selectedReportType = form.watch("reportType")
   const periodStart = form.watch("periodStart")
   const periodEnd = form.watch("periodEnd")
+  const isDayBasedReport =
+    selectedReportType === "weekly" || selectedReportType === "monthly"
 
   useEffect(() => {
     void fetchClasses()
@@ -138,8 +164,40 @@ export function ReportForm({
   useEffect(() => {
     if (selectedClassId && selectedStudentId && periodStart && periodEnd) {
       void fetchReportContext()
+    } else {
+      setAttendanceContext(null)
     }
   }, [selectedClassId, selectedStudentId, periodStart, periodEnd])
+
+  useEffect(() => {
+    if (selectedReportType !== "weekly" && selectedReportType !== "monthly") {
+      return
+    }
+
+    if (periodStart && periodEnd) {
+      return
+    }
+
+    const defaultPeriod = getDefaultReportPeriod(selectedReportType)
+    form.setValue("periodStart", periodStart || defaultPeriod.start, {
+      shouldValidate: true,
+    })
+    form.setValue("periodEnd", periodEnd || defaultPeriod.end, {
+      shouldValidate: true,
+    })
+  }, [form, periodEnd, periodStart, selectedReportType])
+
+  useEffect(() => {
+    if (selectedReportType !== "weekly" && selectedReportType !== "monthly") {
+      return
+    }
+
+    setDayBasedReport((current) =>
+      current.reportType === selectedReportType
+        ? current
+        : createDefaultDayBasedReportData(selectedReportType)
+    )
+  }, [selectedReportType])
 
   const fetchClasses = async () => {
     try {
@@ -168,11 +226,17 @@ export function ReportForm({
   }
 
   const fetchReportContext = async () => {
+    setIsLoadingAttendance(true)
+
     try {
       const response = await fetch(
         `/api/teacher/classes/${selectedClassId}/students/${selectedStudentId}/report-context?periodStart=${periodStart}&periodEnd=${periodEnd}`
       )
       const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load attendance")
+      }
 
       if (data.attendance) {
         setAttendanceContext(data.attendance)
@@ -194,16 +258,38 @@ export function ReportForm({
 
           return updatedSections
         })
+      } else {
+        setAttendanceContext(null)
       }
     } catch (fetchError) {
       console.error("Failed to fetch report context:", fetchError)
+      setAttendanceContext(null)
+    } finally {
+      setIsLoadingAttendance(false)
     }
   }
 
-  const getPayload = (values: FormValues) => ({
-    ...values,
-    sections: sections.map((section, orderIndex) => ({ ...section, orderIndex })),
-  })
+  const getPayload = (values: FormValues) => {
+    const nextSections = [...sections]
+
+    if (values.reportType === "weekly" || values.reportType === "monthly") {
+      nextSections.unshift(
+        buildDayBasedReportSection(
+          values.reportType,
+          dayBasedReport,
+          attendanceContext
+        )
+      )
+    }
+
+    return {
+      ...values,
+      sections: nextSections.map((section, orderIndex) => ({
+        ...section,
+        orderIndex,
+      })),
+    }
+  }
 
   async function saveAsDraft() {
     const isValid = await form.trigger()
@@ -390,7 +476,19 @@ export function ReportForm({
                   <FormItem>
                     <FormLabel>Report Type *</FormLabel>
                     <Select
-                      onValueChange={field.onChange}
+                      onValueChange={(value) => {
+                        field.onChange(value)
+
+                        if (value === "weekly" || value === "monthly") {
+                          const defaultPeriod = getDefaultReportPeriod(value)
+                          form.setValue("periodStart", defaultPeriod.start, {
+                            shouldValidate: true,
+                          })
+                          form.setValue("periodEnd", defaultPeriod.end, {
+                            shouldValidate: true,
+                          })
+                        }
+                      }}
                       value={field.value}
                       disabled={isLoading}
                     >
@@ -458,11 +556,26 @@ export function ReportForm({
             </CardContent>
           </Card>
 
+          {isDayBasedReport && (
+            <DayBasedReportBuilder
+              reportType={selectedReportType}
+              periodStart={periodStart}
+              periodEnd={periodEnd}
+              classId={selectedClassId}
+              studentProfileId={selectedStudentId}
+              value={dayBasedReport}
+              attendanceContext={attendanceContext}
+              isLoadingAttendance={isLoadingAttendance}
+              onChange={setDayBasedReport}
+              disabled={isLoading || isSaving}
+            />
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Report Sections</CardTitle>
               <CardDescription>
-                Add and organize sections for this report
+                Add optional summary sections for this report
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -508,7 +621,11 @@ export function ReportForm({
                 <Button
                   type="button"
                   onClick={() => setShowPublishDialog(true)}
-                  disabled={isLoading || isSaving || sections.length === 0}
+                  disabled={
+                    isLoading ||
+                    isSaving ||
+                    (!isDayBasedReport && sections.length === 0)
+                  }
                 >
                   {isLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

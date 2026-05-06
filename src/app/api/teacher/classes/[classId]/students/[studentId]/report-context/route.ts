@@ -5,6 +5,32 @@ import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
 
+function parseDateRange(start: string | null, end: string | null) {
+  if (!start || !end) {
+    return null
+  }
+
+  const startDate = new Date(`${start}T00:00:00.000Z`)
+  const endDate = new Date(`${end}T23:59:59.999Z`)
+
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return null
+  }
+
+  return {
+    gte: startDate,
+    lte: endDate,
+  }
+}
+
+function toDateKey(value: Date) {
+  return value.toISOString().split("T")[0]
+}
+
+function toDayName(value: Date) {
+  return new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(value)
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { classId: string; studentId: string } }
@@ -62,23 +88,16 @@ export async function GET(
     const searchParams = req.nextUrl.searchParams
     const periodStart = searchParams.get("periodStart")
     const periodEnd = searchParams.get("periodEnd")
+    const dateRange = parseDateRange(periodStart, periodEnd)
 
-    const attendanceDateFilter =
-      periodStart && periodEnd
-        ? {
-            sessionDate: {
-              gte: new Date(periodStart),
-              lte: new Date(periodEnd),
-            },
-          }
-        : {}
+    const sessionDateFilter = dateRange ? { sessionDate: dateRange } : {}
 
     const attendanceRecords = await prisma.attendance.findMany({
       where: {
         studentProfileId: params.studentId,
         classSession: {
           classId: params.classId,
-          ...attendanceDateFilter,
+          ...sessionDateFilter,
         },
       },
       include: {
@@ -99,22 +118,14 @@ export async function GET(
       ).length,
     }
 
-    const recentSessions = await prisma.classSession.findMany({
+    const sessionsInPeriod = await prisma.classSession.findMany({
       where: {
         classId: params.classId,
-        ...(periodStart && periodEnd
-          ? {
-              sessionDate: {
-                gte: new Date(periodStart),
-                lte: new Date(periodEnd),
-              },
-            }
-          : {}),
+        ...sessionDateFilter,
       },
       orderBy: {
-        sessionDate: "desc",
+        sessionDate: "asc",
       },
-      take: 5,
       include: {
         attendances: {
           where: {
@@ -149,8 +160,32 @@ export async function GET(
     })
 
     return NextResponse.json({
-      attendance: attendanceSummary,
-      recentSessions: recentSessions.map((session) => ({
+      attendance: {
+        ...attendanceSummary,
+        sessions: sessionsInPeriod.map((session) => {
+          const attendance = session.attendances[0] || null
+
+          return {
+            id: session.id,
+            title: session.title,
+            date: toDateKey(session.sessionDate),
+            dayName: toDayName(session.sessionDate),
+            startTime: session.startTime.toISOString(),
+            endTime: session.endTime.toISOString(),
+            sessionStatus: session.status,
+            attendance: attendance
+              ? {
+                  id: attendance.id,
+                  status: attendance.status,
+                  lateMinutes: attendance.lateMinutes,
+                  notes: attendance.notes,
+                  joinTime: attendance.joinTime?.toISOString() ?? null,
+                }
+              : null,
+          }
+        }),
+      },
+      recentSessions: sessionsInPeriod.slice(-5).map((session) => ({
         id: session.id,
         title: session.title,
         sessionDate: session.sessionDate,

@@ -17,6 +17,49 @@ interface AttendanceSummary {
   present: number
   late: number
   absent: number
+  excused?: number
+}
+
+interface StructuredDayReportData {
+  builderType: "weekly_day_builder" | "monthly_day_builder"
+  reportType: "weekly" | "monthly"
+  attendanceSummary: AttendanceSummary | null
+  dailyEntries: Array<{
+    date: string
+    dayName: string
+    attendance: {
+      label: string
+      lateMinutes: number | null
+      startTime: string | null
+      endTime: string | null
+    } | null
+    taughtToday: string
+    homework: string
+    performance: string
+    behavior: string
+    teacherNote: string
+  }>
+  nextWeekFocus: {
+    whatWillBeTaught: string
+    areasToImprove: string
+    homeworkFollowUp: string
+    teacherRemarks: string
+  }
+  monthlySummary: {
+    lessonsCovered: string
+    homeworkCompletion: string
+    strengths: string
+    areasForImprovement: string
+    nextMonthFocus: string
+    teacherRemarks: string
+  }
+  monthlyWeeklySummaries: Array<{
+    id: string
+    label: string
+    periodStart: string
+    periodEnd: string
+    summary: string
+  }>
 }
 
 export interface ReportPDFData {
@@ -102,7 +145,154 @@ function parseAttendanceSummary(contentJson: Prisma.JsonValue | null): Attendanc
     present: readNumber("present"),
     late: readNumber("late"),
     absent: readNumber("absent"),
+    excused: readNumber("excused"),
   }
+}
+
+function isStructuredDayReportData(
+  value: Prisma.JsonValue | null
+): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false
+  }
+
+  const builderType = (value as Record<string, unknown>).builderType
+
+  return (
+    builderType === "weekly_day_builder" ||
+    builderType === "monthly_day_builder"
+  )
+}
+
+function renderSmallTextBlock(label: string, value: string | null | undefined) {
+  return `
+    <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; background: #ffffff;">
+      <div style="font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em;">${escapeHtml(label)}</div>
+      <div style="font-size: 13px; margin-top: 4px; white-space: pre-wrap;">${renderTextBlock(
+        value?.trim() || "Not added"
+      )}</div>
+    </div>
+  `
+}
+
+function renderAttendanceStats(attendance: AttendanceSummary) {
+  const stats = [
+    { label: "Sessions", value: attendance.totalSessions, bg: "#f3f4f6", color: "#111827" },
+    { label: "Present", value: attendance.present, bg: "#dcfce7", color: "#16a34a" },
+    { label: "Late", value: attendance.late, bg: "#fef3c7", color: "#ca8a04" },
+    { label: "Absent", value: attendance.absent, bg: "#fee2e2", color: "#dc2626" },
+    { label: "Excused", value: attendance.excused ?? 0, bg: "#dbeafe", color: "#2563eb" },
+  ]
+
+  return `
+    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 14px;">
+      ${stats
+        .map(
+          (stat) => `
+        <div style="text-align: center; padding: 10px; background: ${stat.bg}; border-radius: 8px;">
+          <div style="font-size: 18px; font-weight: 700; color: ${stat.color};">${stat.value || 0}</div>
+          <div style="font-size: 11px; color: #6b7280;">${escapeHtml(stat.label)}</div>
+        </div>
+      `
+        )
+        .join("")}
+    </div>
+  `
+}
+
+function renderStructuredDayReport(data: StructuredDayReportData) {
+  const dailyEntries = data.dailyEntries ?? []
+  const monthlyWeeklySummaries = data.monthlyWeeklySummaries ?? []
+
+  return `
+    ${data.attendanceSummary ? renderAttendanceStats(data.attendanceSummary) : ""}
+
+    ${
+      data.reportType === "monthly"
+        ? `
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px;">
+        ${renderSmallTextBlock("Lessons covered", data.monthlySummary?.lessonsCovered)}
+        ${renderSmallTextBlock("Homework completion", data.monthlySummary?.homeworkCompletion)}
+        ${renderSmallTextBlock("Strengths", data.monthlySummary?.strengths)}
+        ${renderSmallTextBlock("Areas for improvement", data.monthlySummary?.areasForImprovement)}
+        ${renderSmallTextBlock("Next month focus", data.monthlySummary?.nextMonthFocus)}
+        ${renderSmallTextBlock("Teacher remarks", data.monthlySummary?.teacherRemarks)}
+      </div>
+      ${
+        monthlyWeeklySummaries.some((week) => week.summary?.trim())
+          ? `
+        <h4 style="font-size: 15px; margin: 12px 0 8px;">Weekly summaries</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px;">
+          ${monthlyWeeklySummaries
+            .filter((week) => week.summary?.trim())
+            .map((week) =>
+              renderSmallTextBlock(
+                `${week.label}: ${week.periodStart} - ${week.periodEnd}`,
+                week.summary
+              )
+            )
+            .join("")}
+        </div>
+      `
+          : ""
+      }
+    `
+        : ""
+    }
+
+    ${
+      dailyEntries.length > 0
+        ? `
+      <h4 style="font-size: 15px; margin: 12px 0 8px;">Daily entries</h4>
+      ${dailyEntries
+        .map(
+          (entry) => `
+        <div style="border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; margin-bottom: 12px; page-break-inside: avoid;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+            <div>
+              <div style="font-size: 16px; font-weight: 700;">${escapeHtml(entry.dayName || "")}</div>
+              <div style="font-size: 12px; color: #6b7280;">${escapeHtml(entry.date || "")}</div>
+            </div>
+            <div style="font-size: 12px; font-weight: 700; color: #047857;">
+              ${escapeHtml(entry.attendance?.label || "No attendance record")}
+              ${
+                entry.attendance?.lateMinutes
+                  ? ` (${entry.attendance.lateMinutes} min late)`
+                  : ""
+              }
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            ${renderSmallTextBlock("What was taught", entry.taughtToday)}
+            ${renderSmallTextBlock("Homework / lesson work", entry.homework)}
+            ${renderSmallTextBlock("Student performance", entry.performance)}
+            ${renderSmallTextBlock("Behavior / participation", entry.behavior)}
+            <div style="grid-column: 1 / -1;">
+              ${renderSmallTextBlock("Teacher note", entry.teacherNote)}
+            </div>
+          </div>
+        </div>
+      `
+        )
+        .join("")}
+    `
+        : ""
+    }
+
+    ${
+      data.reportType === "weekly"
+        ? `
+      <h4 style="font-size: 15px; margin: 12px 0 8px;">Next week focus</h4>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+        ${renderSmallTextBlock("What will be taught", data.nextWeekFocus?.whatWillBeTaught)}
+        ${renderSmallTextBlock("Areas to improve", data.nextWeekFocus?.areasToImprove)}
+        ${renderSmallTextBlock("Homework / follow-up", data.nextWeekFocus?.homeworkFollowUp)}
+        ${renderSmallTextBlock("Teacher remarks", data.nextWeekFocus?.teacherRemarks)}
+      </div>
+    `
+        : ""
+    }
+  `
 }
 
 export async function fetchReportData(reportId: string): Promise<ReportPDFData | null> {
@@ -209,6 +399,12 @@ export async function fetchReportData(reportId: string): Promise<ReportPDFData |
 }
 
 function renderReportSection(section: ReportPDFData["report"]["sections"][number]) {
+  if (isStructuredDayReportData(section.contentJson)) {
+    return renderStructuredDayReport(
+      section.contentJson as unknown as StructuredDayReportData
+    )
+  }
+
   if (section.sectionType === "attendance") {
     const attendance = parseAttendanceSummary(section.contentJson)
 
@@ -361,7 +557,12 @@ function renderReportHTML(data: ReportPDFData) {
               (section) => `
             <div class="section-card">
               <div class="section-title">${escapeHtml(
-                sectionTypeLabels[section.sectionType] || section.sectionType
+                isStructuredDayReportData(section.contentJson)
+                  ? (section.contentJson as unknown as StructuredDayReportData)
+                      .reportType === "weekly"
+                    ? "Weekly Day-Based Report"
+                    : "Monthly Report Builder"
+                  : sectionTypeLabels[section.sectionType] || section.sectionType
               )}</div>
               ${renderReportSection(section)}
             </div>
