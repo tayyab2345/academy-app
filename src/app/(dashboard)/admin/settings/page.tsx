@@ -80,6 +80,7 @@ export default async function AdminSettingsPage() {
         currentUserId: session.user.id,
         canManageAdmins: adminTeamAccess.canManageAdmins,
         canChangePermissionType: adminTeamAccess.canChangePermissionType,
+        canDeleteAdmins: adminTeamAccess.canDeleteAdmins,
       }}
     />
   )

@@ -5,7 +5,23 @@ import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { CheckCircle2, Loader2, ShieldCheck, UserPlus } from "lucide-react"
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+} from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -60,6 +76,7 @@ type AdminTeamPanelProps = {
   currentUserId: string
   canManageAdmins: boolean
   canChangePermissionType: boolean
+  canDeleteAdmins: boolean
 }
 
 const createAdminSchema = z
@@ -145,12 +162,16 @@ export function AdminTeamPanel({
   currentUserId,
   canManageAdmins,
   canChangePermissionType,
+  canDeleteAdmins,
 }: AdminTeamPanelProps) {
   const router = useRouter()
   const [admins, setAdmins] = useState(() => sortAdmins(initialAdmins))
   const [showForm, setShowForm] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [updatingAdminId, setUpdatingAdminId] = useState<string | null>(null)
+  const [deletingAdminId, setDeletingAdminId] = useState<string | null>(null)
+  const [adminPendingDelete, setAdminPendingDelete] =
+    useState<AdminTeamMember | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -229,6 +250,36 @@ export function AdminTeamPanel({
       )
     } finally {
       setUpdatingAdminId(null)
+    }
+  }
+
+  async function deleteAdmin(admin: AdminTeamMember) {
+    setDeletingAdminId(admin.id)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const response = await fetch(`/api/admin/admin-team/${admin.id}`, {
+        method: "DELETE",
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete admin")
+      }
+
+      setAdmins((current) => current.filter((item) => item.id !== admin.id))
+      setAdminPendingDelete(null)
+      setSuccess("Admin deleted permanently.")
+      router.refresh()
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Failed to delete admin"
+      )
+    } finally {
+      setDeletingAdminId(null)
     }
   }
 
@@ -466,8 +517,11 @@ export function AdminTeamPanel({
                       currentUserId={currentUserId}
                       canManageAdmins={canManageAdmins}
                       canChangePermissionType={canChangePermissionType}
+                      canDeleteAdmins={canDeleteAdmins}
                       isUpdating={updatingAdminId === admin.id}
+                      isDeleting={deletingAdminId === admin.id}
                       onUpdate={updateAdmin}
+                      onRequestDelete={setAdminPendingDelete}
                     />
                   ))}
                 </TableBody>
@@ -482,14 +536,75 @@ export function AdminTeamPanel({
                   currentUserId={currentUserId}
                   canManageAdmins={canManageAdmins}
                   canChangePermissionType={canChangePermissionType}
+                  canDeleteAdmins={canDeleteAdmins}
                   isUpdating={updatingAdminId === admin.id}
+                  isDeleting={deletingAdminId === admin.id}
                   onUpdate={updateAdmin}
+                  onRequestDelete={setAdminPendingDelete}
                 />
               ))}
             </div>
           </>
         )}
       </CardContent>
+
+      <AlertDialog
+        open={Boolean(adminPendingDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deletingAdminId) {
+            setAdminPendingDelete(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <AlertDialogTitle>
+              Permanently delete this admin?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Are you sure you want to permanently delete this admin?
+              </span>
+              <span className="block font-medium text-destructive">
+                This action cannot be undone.
+              </span>
+              {adminPendingDelete ? (
+                <span className="block rounded-md bg-muted p-3 text-foreground">
+                  {adminPendingDelete.firstName} {adminPendingDelete.lastName}
+                  <span className="block break-all text-xs text-muted-foreground">
+                    {adminPendingDelete.email}
+                  </span>
+                </span>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(deletingAdminId)}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!adminPendingDelete || Boolean(deletingAdminId)}
+              onClick={() => {
+                if (adminPendingDelete) {
+                  void deleteAdmin(adminPendingDelete)
+                }
+              }}
+            >
+              {deletingAdminId ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete Admin
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }
@@ -515,29 +630,36 @@ function AdminActions({
   currentUserId,
   canManageAdmins,
   canChangePermissionType,
+  canDeleteAdmins,
   isUpdating,
+  isDeleting,
   onUpdate,
+  onRequestDelete,
 }: {
   admin: AdminTeamMember
   currentUserId: string
   canManageAdmins: boolean
   canChangePermissionType: boolean
+  canDeleteAdmins: boolean
   isUpdating: boolean
+  isDeleting: boolean
   onUpdate: (
     adminId: string,
     payload: Partial<Pick<AdminTeamMember, "isActive" | "adminPermissionType">>
   ) => Promise<void>
+  onRequestDelete: (admin: AdminTeamMember) => void
 }) {
   const isSelf = admin.id === currentUserId
   const canToggleActive = canManageAdmins && !admin.isAcademyOwner && !isSelf
   const canEditPermission =
     canChangePermissionType && !admin.isAcademyOwner && !isUpdating
+  const canDeleteAdmin = canDeleteAdmins && !admin.isAcademyOwner && !isSelf
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
       <Select
         value={admin.adminPermissionType || "full_admin"}
-        disabled={!canEditPermission}
+        disabled={!canEditPermission || isDeleting}
         onValueChange={(value) =>
           onUpdate(admin.id, {
             adminPermissionType: value as AdminPermissionType,
@@ -557,7 +679,7 @@ function AdminActions({
         type="button"
         variant={admin.isActive ? "outline" : "default"}
         size="sm"
-        disabled={!canToggleActive || isUpdating}
+        disabled={!canToggleActive || isUpdating || isDeleting}
         onClick={() => onUpdate(admin.id, { isActive: !admin.isActive })}
       >
         {isUpdating ? (
@@ -565,6 +687,23 @@ function AdminActions({
         ) : null}
         {admin.isActive ? "Deactivate" : "Activate"}
       </Button>
+
+      {canDeleteAdmins ? (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          disabled={!canDeleteAdmin || isUpdating || isDeleting}
+          onClick={() => onRequestDelete(admin)}
+        >
+          {isDeleting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="mr-2 h-4 w-4" />
+          )}
+          Delete
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -574,18 +713,24 @@ function AdminTableRow({
   currentUserId,
   canManageAdmins,
   canChangePermissionType,
+  canDeleteAdmins,
   isUpdating,
+  isDeleting,
   onUpdate,
+  onRequestDelete,
 }: {
   admin: AdminTeamMember
   currentUserId: string
   canManageAdmins: boolean
   canChangePermissionType: boolean
+  canDeleteAdmins: boolean
   isUpdating: boolean
+  isDeleting: boolean
   onUpdate: (
     adminId: string,
     payload: Partial<Pick<AdminTeamMember, "isActive" | "adminPermissionType">>
   ) => Promise<void>
+  onRequestDelete: (admin: AdminTeamMember) => void
 }) {
   return (
     <TableRow>
@@ -615,8 +760,11 @@ function AdminTableRow({
           currentUserId={currentUserId}
           canManageAdmins={canManageAdmins}
           canChangePermissionType={canChangePermissionType}
+          canDeleteAdmins={canDeleteAdmins}
           isUpdating={isUpdating}
+          isDeleting={isDeleting}
           onUpdate={onUpdate}
+          onRequestDelete={onRequestDelete}
         />
       </TableCell>
     </TableRow>
@@ -628,18 +776,24 @@ function AdminMobileCard({
   currentUserId,
   canManageAdmins,
   canChangePermissionType,
+  canDeleteAdmins,
   isUpdating,
+  isDeleting,
   onUpdate,
+  onRequestDelete,
 }: {
   admin: AdminTeamMember
   currentUserId: string
   canManageAdmins: boolean
   canChangePermissionType: boolean
+  canDeleteAdmins: boolean
   isUpdating: boolean
+  isDeleting: boolean
   onUpdate: (
     adminId: string,
     payload: Partial<Pick<AdminTeamMember, "isActive" | "adminPermissionType">>
   ) => Promise<void>
+  onRequestDelete: (admin: AdminTeamMember) => void
 }) {
   return (
     <div className="rounded-xl border p-4">
@@ -666,8 +820,11 @@ function AdminMobileCard({
           currentUserId={currentUserId}
           canManageAdmins={canManageAdmins}
           canChangePermissionType={canChangePermissionType}
+          canDeleteAdmins={canDeleteAdmins}
           isUpdating={isUpdating}
+          isDeleting={isDeleting}
           onUpdate={onUpdate}
+          onRequestDelete={onRequestDelete}
         />
       </div>
     </div>

@@ -20,6 +20,7 @@ export type AdminTeamAccess = {
   isFullAdmin: boolean
   canManageAdmins: boolean
   canChangePermissionType: boolean
+  canDeleteAdmins: boolean
 }
 
 export function getAdminTypeLabel(
@@ -73,6 +74,7 @@ export async function getAdminTeamAccess(userId: string): Promise<AdminTeamAcces
     isFullAdmin,
     canManageAdmins: isFullAdmin,
     canChangePermissionType: user.isAcademyOwner,
+    canDeleteAdmins: user.isAcademyOwner,
   }
 }
 

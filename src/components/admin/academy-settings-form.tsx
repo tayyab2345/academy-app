@@ -77,6 +77,7 @@ interface AcademySettingsFormProps {
     currentUserId: string
     canManageAdmins: boolean
     canChangePermissionType: boolean
+    canDeleteAdmins: boolean
   }
 }
 
@@ -350,6 +351,7 @@ export function AcademySettingsForm({
         currentUserId={adminTeam.currentUserId}
         canManageAdmins={adminTeam.canManageAdmins}
         canChangePermissionType={adminTeam.canChangePermissionType}
+        canDeleteAdmins={adminTeam.canDeleteAdmins}
       />
 
       <Card className="border-destructive/30">

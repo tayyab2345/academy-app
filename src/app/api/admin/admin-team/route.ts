@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import type { AdminPermissionType } from "@prisma/client"
-import bcrypt from "bcryptjs"
 import { z } from "zod"
 import { authOptions } from "@/lib/auth"
 import {
@@ -9,6 +8,12 @@ import {
   getAdminTeamMembers,
 } from "@/lib/admin/admin-team"
 import { prisma } from "@/lib/prisma"
+import {
+  createOrLinkSupabasePasswordUser,
+  deleteSupabaseAuthUser,
+  normalizeAuthEmail,
+  updateSupabasePasswordUser,
+} from "@/lib/supabase-auth"
 
 const createAdminSchema = z
   .object({
@@ -27,10 +32,6 @@ const createAdminSchema = z
     message: "Confirm password must match password",
     path: ["confirmPassword"],
   })
-
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase()
-}
 
 export async function GET() {
   try {
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const normalizedEmail = normalizeEmail(validated.data.email)
+    const normalizedEmail = normalizeAuthEmail(validated.data.email)
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: {
@@ -109,34 +110,108 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: message }, { status: 409 })
     }
 
-    const passwordHash = await bcrypt.hash(validated.data.password, 10)
+    let authUser: Awaited<ReturnType<typeof createOrLinkSupabasePasswordUser>>
 
-    const admin = await prisma.user.create({
-      data: {
+    try {
+      authUser = await createOrLinkSupabasePasswordUser({
         email: normalizedEmail,
-        passwordHash,
+        password: validated.data.password,
         role: "admin",
+        academyId: access.academyId,
         firstName: validated.data.firstName,
         lastName: validated.data.lastName,
         phone: validated.data.phone?.trim() || null,
-        academyId: access.academyId,
-        isActive: true,
-        isAcademyOwner: false,
-        adminPermissionType:
-          validated.data.adminPermissionType as AdminPermissionType,
+      })
+
+      if (!authUser.created) {
+        await updateSupabasePasswordUser(authUser.user.id, {
+          email: normalizedEmail,
+          password: validated.data.password,
+          role: "admin",
+          academyId: access.academyId,
+          firstName: validated.data.firstName,
+          lastName: validated.data.lastName,
+          phone: validated.data.phone?.trim() || null,
+        })
+      }
+    } catch (error) {
+      console.error("[admin-team][POST][supabase-auth] failed", {
+        email: normalizedEmail,
+        error,
+      })
+      return NextResponse.json(
+        {
+          error:
+            "Could not create the admin login account. Please check Supabase Auth configuration.",
+        },
+        { status: 502 }
+      )
+    }
+
+    const existingAuthLinkedUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: authUser.user.id },
+          { supabaseAuthUserId: authUser.user.id },
+        ],
       },
       select: {
         id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        adminPermissionType: true,
-        isActive: true,
-        isAcademyOwner: true,
-        createdAt: true,
       },
     })
+
+    if (existingAuthLinkedUser) {
+      return NextResponse.json(
+        { error: "This Supabase Auth user is already linked to an app user." },
+        { status: 409 }
+      )
+    }
+
+    let admin
+
+    try {
+      admin = await prisma.user.create({
+        data: {
+          id: authUser.user.id,
+          email: normalizedEmail,
+          passwordHash: null,
+          supabaseAuthUserId: authUser.user.id,
+          role: "admin",
+          firstName: validated.data.firstName,
+          lastName: validated.data.lastName,
+          phone: validated.data.phone?.trim() || null,
+          academyId: access.academyId,
+          isActive: true,
+          isAcademyOwner: false,
+          adminPermissionType:
+            validated.data.adminPermissionType as AdminPermissionType,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          adminPermissionType: true,
+          isActive: true,
+          isAcademyOwner: true,
+          createdAt: true,
+        },
+      })
+    } catch (error) {
+      if (authUser.created) {
+        try {
+          await deleteSupabaseAuthUser(authUser.user.id)
+        } catch (cleanupError) {
+          console.error("[admin-team][POST][supabase-auth-cleanup] failed", {
+            authUserId: authUser.user.id,
+            cleanupError,
+          })
+        }
+      }
+
+      throw error
+    }
 
     return NextResponse.json(
       {
