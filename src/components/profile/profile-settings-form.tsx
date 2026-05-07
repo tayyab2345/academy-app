@@ -25,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { ChangePasswordForm } from "@/components/profile/change-password-form"
 import { ImageUploadField } from "@/components/profile/image-upload-field"
 
 const profileSettingsSchema = z.object({
@@ -115,40 +116,41 @@ export function ProfileSettingsForm({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="avatarUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Profile Photo</FormLabel>
-                  <FormControl>
-                    <ImageUploadField
-                      value={field.value}
-                      onChange={field.onChange}
-                      uploadTarget="user_avatar"
-                      shape="circle"
-                      title="Profile photo"
-                      description="Upload a profile photo that will appear everywhere your account is shown."
-                      firstName={form.watch("firstName")}
-                      lastName={form.watch("lastName")}
-                      disabled={isSaving}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField
+                control={form.control}
+                name="avatarUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Profile Photo</FormLabel>
+                    <FormControl>
+                      <ImageUploadField
+                        value={field.value}
+                        onChange={field.onChange}
+                        uploadTarget="user_avatar"
+                        shape="circle"
+                        title="Profile photo"
+                        description="Upload a profile photo that will appear everywhere your account is shown."
+                        firstName={form.watch("firstName")}
+                        lastName={form.watch("lastName")}
+                        disabled={isSaving}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
                 control={form.control}
                 name="firstName"
                 render={({ field }) => (
@@ -175,18 +177,18 @@ export function ProfileSettingsForm({
                   </FormItem>
                 )}
               />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <FormLabel>Email Address</FormLabel>
-                <Input value={user.email} disabled />
-                <FormDescription>
-                  Email changes are not part of this profile batch.
-                </FormDescription>
               </div>
 
-              <FormField
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <FormLabel>Email Address</FormLabel>
+                  <Input value={user.email} disabled />
+                  <FormDescription>
+                    Email changes are not part of this profile batch.
+                  </FormDescription>
+                </div>
+
+                <FormField
                 control={form.control}
                 name="phone"
                 render={({ field }) => (
@@ -207,33 +209,36 @@ export function ProfileSettingsForm({
                   </FormItem>
                 )}
               />
-            </div>
-
-            {error ? (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
               </div>
-            ) : null}
 
-            {success ? (
-              <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                {success}
+              {error ? (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
+                </div>
+              ) : null}
+
+              {success ? (
+                <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                  {success}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Save Profile
+                </Button>
               </div>
-            ) : null}
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
 
-            <div className="flex justify-end">
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Save Profile
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+      <ChangePasswordForm />
+    </div>
   )
 }
