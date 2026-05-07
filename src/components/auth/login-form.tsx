@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { signIn } from "next-auth/react"
+import { getSession, signIn } from "next-auth/react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -60,13 +60,13 @@ export function LoginForm() {
   const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [sessionNotice, setSessionNotice] = React.useState<string | null>(null)
   const [showPassword, setShowPassword] = React.useState(false)
   const [rememberEmail, setRememberEmail] = React.useState(true)
 
   const callbackUrl = searchParams.get("callbackUrl") || "/"
   const registered = searchParams.get("registered")
   const notice = searchParams.get("notice")
-  const authRetry = searchParams.get("auth") === "retry"
   const assignedSubdomain = searchParams.get("subdomain")
 
   const form = useForm<FormValues>({
@@ -89,6 +89,7 @@ export function LoginForm() {
   async function onSubmit(values: FormValues) {
     setIsLoading(true)
     setError(null)
+    setSessionNotice(null)
 
     try {
       const result = await signIn("credentials", {
@@ -122,6 +123,8 @@ export function LoginForm() {
       }
 
       if (result?.ok) {
+        setSessionNotice("Signing you in and preparing your dashboard...")
+
         if (rememberEmail) {
           window.localStorage.setItem("academyflow-remembered-email", values.email)
         } else {
@@ -147,7 +150,8 @@ export function LoginForm() {
         const readyUser = await waitForDashboardSessionIdentity()
 
         if (!readyUser) {
-          setError("Your secure session is still preparing. Please try again in a moment.")
+          setError("We could not finish signing you in. Please try again.")
+          setSessionNotice(null)
           setIsLoading(false)
           return
         }
@@ -156,11 +160,13 @@ export function LoginForm() {
           destination = getRoleRedirectPath(readyUser.role)
         }
 
+        setSessionNotice("Session ready. Opening your dashboard...")
         router.replace(destination)
         router.refresh()
       }
     } catch (err) {
       setError("An unexpected error occurred. Please try again.")
+      setSessionNotice(null)
       setIsLoading(false)
     }
   }
@@ -202,12 +208,6 @@ export function LoginForm() {
           {notice && (
             <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
               {notice}
-            </div>
-          )}
-
-          {authRetry && !notice && (
-            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-              Your secure session was not ready yet. Please sign in again.
             </div>
           )}
 
@@ -281,6 +281,13 @@ export function LoginForm() {
                 </div>
               )}
 
+              {sessionNotice && !error && (
+                <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {sessionNotice}
+                </div>
+              )}
+
               <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                 <label className="flex items-center gap-3">
                   <Checkbox
@@ -303,7 +310,7 @@ export function LoginForm() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in
+                    Signing you in
                   </>
                 ) : (
                   <>
@@ -337,10 +344,23 @@ export function LoginForm() {
 }
 
 async function waitForDashboardSessionIdentity() {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  const delays = [150, 250, 350, 500, 700, 900, 1200, 1500, 2000, 2500]
+
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
     try {
+      const session = await getSession()
+
+      if (hasUsableDashboardIdentity(session?.user)) {
+        return session.user
+      }
+
       const response = await fetch("/api/auth/session", {
         cache: "no-store",
+        credentials: "include",
+        headers: {
+          "Cache-Control": "no-store",
+          Pragma: "no-cache",
+        },
       })
 
       if (response.ok) {
@@ -354,7 +374,11 @@ async function waitForDashboardSessionIdentity() {
       console.warn("[login] session readiness check failed", error)
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    const delay = delays[attempt]
+
+    if (delay) {
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
   }
 
   return null

@@ -49,7 +49,7 @@ export default withAuth(
     }
 
     if (token && !hasDashboardIdentity && isDashboardPath) {
-      return NextResponse.redirect(new URL("/login?auth=retry", req.url))
+      return NextResponse.redirect(new URL("/login", req.url))
     }
 
     return NextResponse.next()

@@ -7,6 +7,12 @@ import {
 } from "@/lib/academy-deletion"
 import { hasUsableDashboardIdentity } from "@/lib/role-redirect"
 
+const SESSION_LOOKUP_RETRY_DELAYS_MS = [150, 350, 700]
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export async function getAcademyLifecycleState(academyId: string) {
   const academy = await prisma.academy.findUnique({
     where: { id: academyId },
@@ -51,39 +57,56 @@ export async function requireActiveDashboardSession(session: Session | null) {
       role: candidateUser?.role ?? null,
       hasAcademyId: Boolean(candidateUser?.academyId),
     })
-    redirect("/login?auth=retry")
+    redirect("/login")
   }
 
   const user = candidateUser
 
-  let academyState: Awaited<ReturnType<typeof getAcademyLifecycleState>>
-  let userState:
-    | {
-        id: string
-        academyId: string
-        isActive: boolean
-      }
-    | null
+  let academyState: Awaited<ReturnType<typeof getAcademyLifecycleState>> = null
+  let userState: {
+    id: string
+    academyId: string
+    isActive: boolean
+  } | null = null
+  let lastLookupError: unknown = null
 
-  try {
-    ;[academyState, userState] = await Promise.all([
-      getAcademyLifecycleState(user.academyId),
-      prisma.user.findUnique({
-        where: { id: user.id },
-        select: {
-          id: true,
-          academyId: true,
-          isActive: true,
-        },
-      }),
-    ])
-  } catch (error) {
-    console.error("[dashboard-session] profile lookup failed", {
+  for (let attempt = 0; attempt < SESSION_LOOKUP_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      ;[academyState, userState] = await Promise.all([
+        getAcademyLifecycleState(user.academyId),
+        prisma.user.findUnique({
+          where: { id: user.id },
+          select: {
+            id: true,
+            academyId: true,
+            isActive: true,
+          },
+        }),
+      ])
+
+      if (academyState && userState) {
+        break
+      }
+    } catch (error) {
+      lastLookupError = error
+      console.warn("[dashboard-session] profile lookup retry failed", {
+        userId: user.id,
+        academyId: user.academyId,
+        attempt: attempt + 1,
+        prisma: formatPrismaError(error),
+      })
+    }
+
+    await wait(SESSION_LOOKUP_RETRY_DELAYS_MS[attempt])
+  }
+
+  if (lastLookupError && (!academyState || !userState)) {
+    console.error("[dashboard-session] profile lookup failed after retries", {
       userId: user.id,
       academyId: user.academyId,
-      prisma: formatPrismaError(error),
+      prisma: formatPrismaError(lastLookupError),
     })
-    redirect("/login?auth=retry")
+    redirect("/login")
   }
 
   if (
@@ -98,7 +121,7 @@ export async function requireActiveDashboardSession(session: Session | null) {
       foundAcademyId: userState?.academyId ?? null,
       isActive: userState?.isActive ?? null,
     })
-    redirect("/login?auth=retry")
+    redirect("/login")
   }
 
   if (!academyState) {
@@ -106,7 +129,7 @@ export async function requireActiveDashboardSession(session: Session | null) {
       userId: user.id,
       academyId: user.academyId,
     })
-    redirect("/login?auth=retry")
+    redirect("/login")
   }
 
   if (academyState.isDeleted) {
