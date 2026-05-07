@@ -109,15 +109,15 @@ export function TeacherReportsPageContent({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Reports</h2>
           <p className="text-muted-foreground">
             Create and manage student progress reports
           </p>
         </div>
-        <Link href="/teacher/reports/new">
-          <Button>
+        <Link href="/teacher/reports/new" className="w-full sm:w-auto">
+          <Button className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             Create Report
           </Button>
@@ -130,9 +130,9 @@ export function TeacherReportsPageContent({
           <CardDescription>Filter by report type and status</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSearch} className="flex flex-wrap gap-3">
+          <form onSubmit={handleSearch} className="grid gap-3 sm:flex sm:flex-wrap">
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder="Report Type" />
               </SelectTrigger>
               <SelectContent>
@@ -144,7 +144,7 @@ export function TeacherReportsPageContent({
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -155,9 +155,16 @@ export function TeacherReportsPageContent({
                 ))}
               </SelectContent>
             </Select>
-            <Button type="submit">Apply Filters</Button>
+            <Button type="submit" className="w-full sm:w-auto">
+              Apply Filters
+            </Button>
             {hasActiveFilters && (
-              <Button type="button" variant="ghost" onClick={clearFilters}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={clearFilters}
+                className="w-full sm:w-auto"
+              >
                 Clear
               </Button>
             )}
