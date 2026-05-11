@@ -16,6 +16,7 @@ import {
 import { authOptions } from "@/lib/auth"
 import { calculateOutstandingAmount } from "@/lib/invoice-utils"
 import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
+import { toIsoStringOrNull } from "@/lib/date-serialization"
 import { prisma } from "@/lib/prisma"
 import {
   formatSessionDayName,
@@ -649,9 +650,9 @@ export default async function StudentDashboardPage() {
                               initialAttendance={
                                 studentAttendance
                                   ? {
-                                      joinTime: studentAttendance.joinTime
-                                        ? studentAttendance.joinTime.toISOString()
-                                        : null,
+                                      joinTime: toIsoStringOrNull(
+                                        studentAttendance.joinTime
+                                      ),
                                       lateMinutes: studentAttendance.lateMinutes,
                                     }
                                   : null

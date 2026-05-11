@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { authOptions } from "@/lib/auth"
 import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
+import { toIsoStringOrNull } from "@/lib/date-serialization"
 import { prisma } from "@/lib/prisma"
 import {
   formatSessionDayName,
@@ -447,8 +448,9 @@ export default async function TeacherDashboardPage() {
                     : null
                   const initialJoin = nextSession?.teacherJoins[0]
                     ? {
-                        joinTime:
-                          nextSession.teacherJoins[0].joinTime.toISOString(),
+                        joinTime: toIsoStringOrNull(
+                          nextSession.teacherJoins[0].joinTime
+                        ),
                         status: nextSession.teacherJoins[0].status,
                         lateMinutes: nextSession.teacherJoins[0].lateMinutes,
                       }
@@ -590,8 +592,9 @@ export default async function TeacherDashboardPage() {
                   })
                   const initialJoin = upcomingSession.teacherJoins[0]
                     ? {
-                        joinTime:
-                          upcomingSession.teacherJoins[0].joinTime.toISOString(),
+                        joinTime: toIsoStringOrNull(
+                          upcomingSession.teacherJoins[0].joinTime
+                        ),
                         status: upcomingSession.teacherJoins[0].status,
                         lateMinutes:
                           upcomingSession.teacherJoins[0].lateMinutes,

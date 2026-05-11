@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { authOptions } from "@/lib/auth"
 import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
+import { toIsoStringOrNull } from "@/lib/date-serialization"
 import { prisma } from "@/lib/prisma"
 import { BookOpen, Calendar, Clock } from "lucide-react"
 
@@ -251,15 +252,15 @@ export default async function StudentClassesPage() {
                                   sessionStatus={relevantSession.status}
                                   meetingPlatform={effectiveMeetingSettings.platform}
                                   meetingLink={effectiveMeetingSettings.link}
-                                  initialAttendance={
-                                    attendance
-                                      ? {
-                                          joinTime: attendance.joinTime
-                                            ? attendance.joinTime.toISOString()
-                                            : null,
-                                          lateMinutes: attendance.lateMinutes,
-                                        }
-                                      : null
+                              initialAttendance={
+                                attendance
+                                  ? {
+                                      joinTime: toIsoStringOrNull(
+                                        attendance.joinTime
+                                      ),
+                                      lateMinutes: attendance.lateMinutes,
+                                    }
+                                  : null
                                   }
                                   disabledReason={
                                     joinWindow?.isVisible

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { syncRecurringSessionsForClass } from "@/lib/class-session-schedule"
+import { toIsoStringOrNull } from "@/lib/date-serialization"
 import { prisma } from "@/lib/prisma"
 import {
   ArrowLeft,
@@ -288,9 +289,9 @@ export default async function StudentClassDetailPage({
                             initialAttendance={
                               studentAttendance
                                 ? {
-                                    joinTime: studentAttendance.joinTime
-                                      ? studentAttendance.joinTime.toISOString()
-                                      : null,
+                                    joinTime: toIsoStringOrNull(
+                                      studentAttendance.joinTime
+                                    ),
                                     lateMinutes: studentAttendance.lateMinutes,
                                   }
                                 : null
@@ -488,15 +489,15 @@ export default async function StudentClassDetailPage({
                           sessionStatus={sessionItem.status}
                           meetingPlatform={effectiveMeetingSettings.platform}
                           meetingLink={effectiveMeetingSettings.link}
-                          initialAttendance={
-                            studentAttendance
-                              ? {
-                                  joinTime: studentAttendance.joinTime
-                                    ? studentAttendance.joinTime.toISOString()
-                                    : null,
-                                  lateMinutes: studentAttendance.lateMinutes,
-                                }
-                              : null
+                            initialAttendance={
+                              studentAttendance
+                                ? {
+                                    joinTime: toIsoStringOrNull(
+                                      studentAttendance.joinTime
+                                    ),
+                                    lateMinutes: studentAttendance.lateMinutes,
+                                  }
+                                : null
                           }
                           disabledReason={
                             joinWindow.isVisible

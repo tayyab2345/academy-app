@@ -4,6 +4,7 @@ import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { revalidatePath } from "next/cache"
 import { authOptions } from "@/lib/auth"
+import { toIsoStringOrNull } from "@/lib/date-serialization"
 import { prisma } from "@/lib/prisma"
 import {
   ArrowLeft,
@@ -174,7 +175,7 @@ async function fetchSessionData(sessionId: string) {
     students,
     teacherJoin: teacherJoin
       ? {
-          joinTime: teacherJoin.joinTime.toISOString(),
+          joinTime: toIsoStringOrNull(teacherJoin.joinTime),
           status: teacherJoin.status,
           lateMinutes: teacherJoin.lateMinutes,
         }
