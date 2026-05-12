@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth"
 import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
 import { toIsoStringOrNull } from "@/lib/date-serialization"
 import { prisma } from "@/lib/prisma"
-import { BookOpen, Calendar, Clock } from "lucide-react"
+import { BookOpen, Calendar } from "lucide-react"
 
 import {
   Card,
@@ -19,14 +19,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { JoinSessionButton } from "@/components/student/join-session-button"
 import {
-  formatSessionDate,
-  formatSessionTime,
   getEffectiveSessionMeetingSettings,
   getSessionJoinWindowState,
   isSessionActive,
   SESSION_JOIN_LEAD_MINUTES,
 } from "@/lib/attendance-utils"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
+import { TimeZoneAwareSessionTime } from "@/components/sessions/time-zone-aware-session-time"
 import {
   formatSessionDayName,
   getJoinOpensMessage,
@@ -72,7 +71,8 @@ export default async function StudentClassesPage() {
     }
   )
 
-  const todayStart = getStartOfLocalDay()
+  const academyTimeZone = session.user.academy?.timezone
+  const todayStart = getStartOfLocalDay(new Date(), academyTimeZone)
 
   const enrollments = await prisma.enrollment.findMany({
     where: {
@@ -134,7 +134,6 @@ export default async function StudentClassesPage() {
       },
     },
   })
-
   return (
     <div className="space-y-6">
       <div>
@@ -159,7 +158,11 @@ export default async function StudentClassesPage() {
           {enrollments.map((enrollment) => {
             const cls = enrollment.class
             const primaryTeacher = cls.teachers[0]?.teacherProfile
-            const relevantSession = getRelevantClassSession(cls.sessions)
+            const relevantSession = getRelevantClassSession(
+              cls.sessions,
+              new Date(),
+              academyTimeZone
+            )
             const joinWindow = relevantSession
               ? getSessionJoinWindowState({
                   startTime: relevantSession.startTime,
@@ -199,6 +202,7 @@ export default async function StudentClassesPage() {
                         scheduleStartTime={cls.scheduleStartTime}
                         scheduleEndTime={cls.scheduleEndTime}
                         scheduleRecurrence={cls.scheduleRecurrence}
+                        academyTimeZone={academyTimeZone}
                         emptyMessage="No recurring schedule has been configured yet."
                       />
 
@@ -237,14 +241,18 @@ export default async function StudentClassesPage() {
                                 <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                                   <span className="flex items-center gap-1">
                                     <Calendar className="h-3 w-3" />
-                                    {formatSessionDate(new Date(relevantSession.startTime))}
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {formatSessionTime(new Date(relevantSession.startTime))} -{" "}
-                                    {formatSessionTime(new Date(relevantSession.endTime))}
+                                    {formatSessionDayName(relevantSession.startTime)}
                                   </span>
                                 </div>
+                                <TimeZoneAwareSessionTime
+                                  startTime={
+                                    toIsoStringOrNull(relevantSession.startTime) ||
+                                    relevantSession.startTime
+                                  }
+                                  endTime={toIsoStringOrNull(relevantSession.endTime)}
+                                  academyTimeZone={academyTimeZone}
+                                  compact
+                                />
                               </div>
                               {effectiveMeetingSettings ? (
                                 <JoinSessionButton
@@ -252,6 +260,9 @@ export default async function StudentClassesPage() {
                                   sessionStatus={relevantSession.status}
                                   meetingPlatform={effectiveMeetingSettings.platform}
                                   meetingLink={effectiveMeetingSettings.link}
+                                  sessionStartTime={toIsoStringOrNull(relevantSession.startTime)}
+                                  sessionEndTime={toIsoStringOrNull(relevantSession.endTime)}
+                                  academyTimeZone={academyTimeZone}
                               initialAttendance={
                                 attendance
                                   ? {

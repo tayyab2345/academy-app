@@ -5,12 +5,27 @@ import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { isSupportedStoredOrExternalImageUrl, normalizeOptionalMediaUrl } from "@/lib/media-url"
 import { deleteStoredDocumentByUrl } from "@/lib/storage/document-storage"
+import { resolveAcademyTimeZone } from "@/lib/time-zone"
+
+function isValidTimeZone(timezone: string) {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(new Date())
+    return true
+  } catch {
+    return false
+  }
+}
 
 const settingsSchema = z.object({
   name: z.string().trim().min(2),
   logoUrl: z.string().trim().optional().nullable().or(z.literal("")),
   primaryColor: z.string().regex(/^#[0-9A-F]{6}$/i),
   contactEmail: z.string().trim().email(),
+  timezone: z
+    .string()
+    .trim()
+    .min(1)
+    .refine(isValidTimeZone, "Use a valid IANA timezone like Asia/Karachi"),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -66,6 +81,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const { name, primaryColor, contactEmail } = validatedData.data
+    const timezone = resolveAcademyTimeZone(validatedData.data.timezone)
 
     const updatedAcademy = await prisma.academy.update({
       where: { id: session.user.academyId },
@@ -74,6 +90,7 @@ export async function PATCH(req: NextRequest) {
         logoUrl: nextLogoUrl,
         primaryColor,
         contactEmail,
+        timezone,
       },
     })
 

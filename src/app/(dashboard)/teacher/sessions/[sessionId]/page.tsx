@@ -9,7 +9,6 @@ import { prisma } from "@/lib/prisma"
 import {
   ArrowLeft,
   Calendar,
-  Clock,
   Video,
   MapPin,
   Users,
@@ -28,8 +27,6 @@ import { AttendanceGrid } from "@/components/teacher/attendance/attendance-grid"
 import { MeetingLinkButton } from "@/components/sessions/meeting-link-button"
 import {
   formatLateThresholdLabel,
-  formatSessionDate,
-  formatSessionTime,
   getEffectiveSessionMeetingSettings,
   getMeetingPlatformLabel,
   getSessionJoinWindowState,
@@ -38,6 +35,7 @@ import {
 } from "@/lib/attendance-utils"
 import { TeacherJoinSessionCard } from "@/components/teacher/sessions/teacher-join-session-card"
 import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
+import { TimeZoneAwareSessionTime } from "@/components/sessions/time-zone-aware-session-time"
 
 interface SessionDetailPageProps {
   params: {
@@ -181,6 +179,7 @@ async function fetchSessionData(sessionId: string) {
         }
       : null,
     canTrackTeacherJoin: session.user.role === "teacher",
+    academyTimeZone: session.user.academy?.timezone ?? null,
   }
 }
 
@@ -207,7 +206,13 @@ export default async function SessionDetailPage({
     notFound()
   }
 
-  const { session: classSession, students, teacherJoin, canTrackTeacherJoin } = data
+  const {
+    session: classSession,
+    students,
+    teacherJoin,
+    canTrackTeacherJoin,
+    academyTimeZone,
+  } = data
   const statusBadge = getSessionStatusBadge(classSession.status)
   const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
     sessionMeetingPlatform: classSession.meetingPlatform,
@@ -317,6 +322,9 @@ export default async function SessionDetailPage({
               meetingPlatform={effectiveMeetingSettings.platform}
               meetingLink={effectiveMeetingSettings.link}
               initialJoin={teacherJoin}
+              sessionStartTime={toIsoStringOrNull(classSession.startTime)}
+              sessionEndTime={toIsoStringOrNull(classSession.endTime)}
+              academyTimeZone={academyTimeZone}
               showMeta={false}
               align="start"
               className="w-full sm:w-auto"
@@ -336,16 +344,18 @@ export default async function SessionDetailPage({
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-start gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>{formatSessionDate(classSession.sessionDate)}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>
-                  {formatSessionTime(classSession.startTime)} -{" "}
-                  {formatSessionTime(classSession.endTime)}
-                </span>
+                <TimeZoneAwareSessionTime
+                  startTime={
+                    toIsoStringOrNull(classSession.startTime) ||
+                    classSession.startTime
+                  }
+                  endTime={toIsoStringOrNull(classSession.endTime)}
+                  academyTimeZone={academyTimeZone}
+                  showIcon={false}
+                  compact
+                />
               </div>
             </div>
             <div className="space-y-3">
@@ -391,6 +401,9 @@ export default async function SessionDetailPage({
                 meetingPlatform={effectiveMeetingSettings.platform}
                 meetingLink={effectiveMeetingSettings.link}
                 initialJoin={teacherJoin}
+                sessionStartTime={toIsoStringOrNull(classSession.startTime)}
+                sessionEndTime={toIsoStringOrNull(classSession.endTime)}
+                academyTimeZone={academyTimeZone}
                 joinWindowVisible={joinWindow.isVisible || Boolean(teacherJoin)}
                 joinWindowMessage={`Join button appears ${SESSION_JOIN_LEAD_MINUTES} minutes before class time.`}
               />

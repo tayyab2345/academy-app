@@ -24,7 +24,7 @@ model Academy {
   logoUrl         String?   @map("logo_url")
   primaryColor    String    @default("#059669") @map("primary_color")
   secondaryColor  String?   @map("secondary_color")
-  timezone        String    @default("UTC")
+  timezone        String    @default("Asia/Karachi")
   contactEmail    String    @map("contact_email")
   isDeleted       Boolean   @default(false) @map("is_deleted")
   deletedAt       DateTime? @map("deleted_at")

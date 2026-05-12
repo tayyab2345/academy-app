@@ -147,7 +147,8 @@ export function getTeacherActiveClassOptions(userId: string) {
 }
 
 export async function getTeacherClassesOverviewData(
-  userId: string
+  userId: string,
+  academyTimeZone?: string | null
 ): Promise<TeacherClassOverviewItem[] | null> {
   const teacherProfile = await prisma.teacherProfile.findUnique({
     where: { userId },
@@ -180,7 +181,7 @@ export async function getTeacherClassesOverviewData(
   )
 
   const now = new Date()
-  const todayStart = getStartOfLocalDay(now)
+  const todayStart = getStartOfLocalDay(now, academyTimeZone)
 
   const classTeachers = await prisma.classTeacher.findMany({
     where: {
@@ -264,7 +265,11 @@ export async function getTeacherClassesOverviewData(
   })
 
   return classTeachers.map((classTeacher) => {
-    const nextSession = getRelevantClassSession(classTeacher.class.sessions, now)
+    const nextSession = getRelevantClassSession(
+      classTeacher.class.sessions,
+      now,
+      academyTimeZone
+    )
 
     return {
       id: classTeacher.class.id,
@@ -311,6 +316,7 @@ export async function getTeacherClassSessionsPageData(input: {
   classId: string
   page: number
   limit: number
+  academyTimeZone?: string | null
 }): Promise<TeacherClassSessionsPageData | null> {
   const teacherProfile = await prisma.teacherProfile.findUnique({
     where: { userId: input.userId },
@@ -363,7 +369,7 @@ export async function getTeacherClassSessionsPageData(input: {
   })
 
   const now = new Date()
-  const todayStart = getStartOfLocalDay(now)
+  const todayStart = getStartOfLocalDay(now, input.academyTimeZone)
 
   const refreshedClassTeacher = await prisma.classTeacher.findUnique({
     where: {
@@ -444,7 +450,8 @@ export async function getTeacherClassSessionsPageData(input: {
 
   const relevantSession = getRelevantClassSession(
     refreshedClassTeacher.class.sessions,
-    now
+    now,
+    input.academyTimeZone
   )
 
   const where = {

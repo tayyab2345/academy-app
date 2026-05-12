@@ -29,12 +29,26 @@ import { Separator } from "@/components/ui/separator"
 import { ImageUploadField } from "@/components/profile/image-upload-field"
 import { DeleteAcademyDialog } from "@/components/admin/delete-academy-dialog"
 import { AdminTeamPanel } from "@/components/admin/admin-team-panel"
+import { resolveAcademyTimeZone } from "@/lib/time-zone"
+
+function isValidTimeZone(timezone: string) {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(new Date())
+    return true
+  } catch {
+    return false
+  }
+}
 
 const academySettingsSchema = z.object({
   name: z.string().min(2, "Academy name must be at least 2 characters"),
   logoUrl: z.string().nullable().optional(),
   primaryColor: z.string().regex(/^#[0-9A-F]{6}$/i, "Must be a valid hex color"),
   contactEmail: z.string().email("Please enter a valid email address"),
+  timezone: z
+    .string()
+    .min(1, "Academy timezone is required")
+    .refine(isValidTimeZone, "Use a valid IANA timezone like Asia/Karachi"),
 })
 
 type AcademySettingsValues = z.infer<typeof academySettingsSchema>
@@ -54,6 +68,7 @@ interface AcademySettingsFormProps {
     logoUrl: string | null
     primaryColor: string
     contactEmail: string
+    timezone: string
   }
   deleteSummary: {
     teachers: number
@@ -100,6 +115,7 @@ export function AcademySettingsForm({
       logoUrl: academy.logoUrl,
       primaryColor: academy.primaryColor,
       contactEmail: academy.contactEmail,
+      timezone: resolveAcademyTimeZone(academy.timezone),
     },
   })
 
@@ -133,6 +149,7 @@ export function AcademySettingsForm({
             logoUrl: data.academy.logoUrl,
             primaryColor: data.academy.primaryColor,
             contactEmail: data.academy.contactEmail,
+            timezone: data.academy.timezone,
           },
         },
       })
@@ -313,6 +330,28 @@ export function AcademySettingsForm({
                     </FormControl>
                     <FormDescription>
                       Public email address used in academy-branded communication.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="timezone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Academy Timezone</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Asia/Karachi"
+                        disabled={isSaving}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Use an IANA timezone like Asia/Karachi or Europe/Oslo.
+                      Class schedules are created in this academy timezone.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

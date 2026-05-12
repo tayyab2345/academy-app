@@ -14,6 +14,12 @@ import {
   formatSessionTime,
   getSessionJoinStatusBadge,
 } from "@/lib/attendance-utils"
+import { getLiveJoinWindowState } from "@/lib/join-window"
+import {
+  formatTimeOnlyInZone,
+  getReadableTimeZoneLabel,
+  safeResolveBrowserTimeZone,
+} from "@/lib/time-zone-labels"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -35,6 +41,10 @@ interface TeacherJoinButtonProps {
   align?: "start" | "end"
   disabledReason?: string | null
   disabledLabel?: string
+  sessionStartTime?: string | null
+  sessionEndTime?: string | null
+  academyTimeZone?: string | null
+  joinLeadMinutes?: number
 }
 
 export function TeacherJoinButton({
@@ -48,6 +58,10 @@ export function TeacherJoinButton({
   align = "end",
   disabledReason = null,
   disabledLabel = "Join opens soon",
+  sessionStartTime = null,
+  sessionEndTime = null,
+  academyTimeZone = null,
+  joinLeadMinutes = 15,
 }: TeacherJoinButtonProps) {
   const router = useRouter()
   const [teacherJoin, setTeacherJoin] = useState<TeacherJoinRecord | null>(
@@ -55,14 +69,77 @@ export function TeacherJoinButton({
   )
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const [browserTimeZone, setBrowserTimeZone] = useState<string | null>(null)
 
   useEffect(() => {
     setTeacherJoin(initialJoin)
   }, [initialJoin])
 
+  useEffect(() => {
+    setBrowserTimeZone(
+      safeResolveBrowserTimeZone(
+        Intl.DateTimeFormat().resolvedOptions().timeZone
+      )
+    )
+  }, [])
+
+  useEffect(() => {
+    if (!sessionStartTime || !sessionEndTime) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      setNow(new Date())
+    }, 30_000)
+
+    return () => window.clearInterval(interval)
+  }, [sessionEndTime, sessionStartTime])
+
+  const liveJoinState =
+    sessionStartTime && sessionEndTime
+      ? getLiveJoinWindowState(
+          {
+            startTime: sessionStartTime,
+            endTime: sessionEndTime,
+            status: sessionStatus,
+          },
+          now,
+          joinLeadMinutes
+        )
+      : null
+  const openTimeLabel =
+    liveJoinState?.opensAt && liveJoinState.phase === "before"
+      ? `Join opens at ${formatTimeOnlyInZone(
+          liveJoinState.opensAt,
+          browserTimeZone || undefined
+        )}${
+          browserTimeZone
+            ? ` ${getReadableTimeZoneLabel(browserTimeZone)}`
+            : " your local time"
+        }`
+      : null
+  const effectiveDisabledReason =
+    liveJoinState?.phase === "before"
+      ? openTimeLabel
+      : liveJoinState?.phase === "ended"
+        ? "Class ended"
+        : liveJoinState?.phase === "closed"
+          ? "This session is not open for joining."
+          : disabledReason
+  const effectiveDisabledLabel =
+    liveJoinState?.phase === "before"
+      ? openTimeLabel || disabledLabel
+      : liveJoinState?.phase === "ended"
+        ? "Class ended"
+        : liveJoinState?.phase === "closed"
+          ? "Unavailable"
+          : disabledLabel
   const canJoin =
-    sessionStatus === "scheduled" || sessionStatus === "ongoing"
-  const disabledBySchedule = !!disabledReason && !teacherJoin
+    liveJoinState?.canJoin ??
+    (sessionStatus === "scheduled" || sessionStatus === "ongoing")
+  const disabledBySchedule = !!effectiveDisabledReason && !teacherJoin
+  const classEnded = liveJoinState?.phase === "ended"
   const statusBadge = teacherJoin
     ? getSessionJoinStatusBadge(teacherJoin.status)
     : null
@@ -72,7 +149,7 @@ export function TeacherJoinButton({
   }
 
   const handleJoin = async () => {
-    if (!canJoin || disabledBySchedule) {
+    if (!canJoin || disabledBySchedule || classEnded) {
       return
     }
 
@@ -133,6 +210,7 @@ export function TeacherJoinButton({
         disabled={
           isLoading ||
           disabledBySchedule ||
+          classEnded ||
           !canJoin ||
           (meetingPlatform !== "in_person" && !meetingLink) ||
           (meetingPlatform === "in_person" && !!teacherJoin)
@@ -152,8 +230,10 @@ export function TeacherJoinButton({
         ) : (
           <Video className="mr-2 h-4 w-4" />
         )}
-        {disabledBySchedule && !teacherJoin
-          ? disabledLabel
+        {classEnded
+          ? "Class ended"
+          : disabledBySchedule && !teacherJoin
+          ? effectiveDisabledLabel
           : teacherJoin
           ? meetingPlatform === "in_person"
             ? "Joined"
@@ -163,16 +243,24 @@ export function TeacherJoinButton({
             : "Join Class"}
       </Button>
 
-      {showMeta && disabledReason && !teacherJoin ? (
-        <p className="text-xs text-muted-foreground">{disabledReason}</p>
+      {showMeta && effectiveDisabledReason && !teacherJoin ? (
+        <p className="text-xs text-muted-foreground">{effectiveDisabledReason}</p>
       ) : showMeta && teacherJoin ? (
         <div className="space-y-1">
           {statusBadge ? (
             <Badge variant={statusBadge.variant as any}>{statusBadge.label}</Badge>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Joined {formatSessionDate(teacherJoin.joinTime)} at{" "}
-            {formatSessionTime(teacherJoin.joinTime)}
+            Joined{" "}
+            {formatSessionDate(
+              teacherJoin.joinTime,
+              browserTimeZone || academyTimeZone
+            )}{" "}
+            at{" "}
+            {formatSessionTime(
+              teacherJoin.joinTime,
+              browserTimeZone || academyTimeZone
+            )}
           </p>
           {teacherJoin.status === "late" ? (
             <p className="text-xs text-amber-600">

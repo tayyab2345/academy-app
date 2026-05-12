@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import type { TeacherClassSessionListItem } from "@/lib/teacher/teacher-class-data"
 import {
-  formatSessionDate,
-  formatSessionTime,
   formatLateThresholdLabel,
   getEffectiveSessionMeetingSettings,
   getMeetingPlatformLabel,
@@ -28,8 +26,10 @@ import {
 import { SessionsTable } from "@/components/teacher/sessions/sessions-table"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
 import { CourseSyllabusPanel } from "@/components/courses/course-syllabus-panel"
+import { TimeZoneAwareSessionTime } from "@/components/sessions/time-zone-aware-session-time"
 import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
 import { MeetingLinkButton } from "@/components/sessions/meeting-link-button"
+import { toIsoStringOrNull } from "@/lib/date-serialization"
 
 interface TeacherClassSessionsPageContentProps {
   classId: string
@@ -55,6 +55,7 @@ interface TeacherClassSessionsPageContentProps {
   total: number
   page: number
   limit: number
+  academyTimeZone?: string | null
 }
 
 export function TeacherClassSessionsPageContent({
@@ -64,6 +65,7 @@ export function TeacherClassSessionsPageContent({
   total,
   page,
   limit,
+  academyTimeZone,
 }: TeacherClassSessionsPageContentProps) {
   const router = useRouter()
   const baseUrl = `/teacher/classes/${classId}/sessions`
@@ -137,6 +139,7 @@ export function TeacherClassSessionsPageContent({
                 scheduleStartTime={classInfo.scheduleStartTime}
                 scheduleEndTime={classInfo.scheduleEndTime}
                 scheduleRecurrence={classInfo.scheduleRecurrence}
+                academyTimeZone={academyTimeZone}
                 variant="detailed"
                 emptyMessage="No recurring schedule has been configured for this class yet."
               />
@@ -163,6 +166,9 @@ export function TeacherClassSessionsPageContent({
                     sessionStatus={nextSession.status}
                     meetingPlatform={effectiveMeetingSettings.platform}
                     meetingLink={effectiveMeetingSettings.link}
+                    sessionStartTime={toIsoStringOrNull(nextSession.startTime)}
+                    sessionEndTime={toIsoStringOrNull(nextSession.endTime)}
+                    academyTimeZone={academyTimeZone}
                     initialJoin={nextSession.teacherJoin}
                     disabledReason={
                       nextSessionJoinWindow?.isVisible
@@ -213,6 +219,7 @@ export function TeacherClassSessionsPageContent({
               scheduleStartTime={classInfo.scheduleStartTime}
               scheduleEndTime={classInfo.scheduleEndTime}
               scheduleRecurrence={classInfo.scheduleRecurrence}
+              academyTimeZone={academyTimeZone}
               variant="detailed"
               emptyMessage="No recurring schedule has been configured for this class yet."
             />
@@ -247,15 +254,17 @@ export function TeacherClassSessionsPageContent({
                       <span className="font-medium text-foreground">Day:</span>{" "}
                       {formatSessionDayName(nextSession.startTime)}
                     </p>
-                    <p>
-                      <span className="font-medium text-foreground">Date:</span>{" "}
-                      {formatSessionDate(new Date(nextSession.startTime))}
-                    </p>
-                    <p>
-                      <span className="font-medium text-foreground">Time:</span>{" "}
-                      {formatSessionTime(new Date(nextSession.startTime))} -{" "}
-                      {formatSessionTime(new Date(nextSession.endTime))}
-                    </p>
+                    <div className="sm:col-span-2">
+                      <TimeZoneAwareSessionTime
+                        startTime={
+                          toIsoStringOrNull(nextSession.startTime) ||
+                          nextSession.startTime
+                        }
+                        endTime={toIsoStringOrNull(nextSession.endTime)}
+                        academyTimeZone={academyTimeZone}
+                        compact
+                      />
+                    </div>
                     <p>
                       <span className="font-medium text-foreground">Platform:</span>{" "}
                       {getMeetingPlatformLabel(effectiveMeetingSettings.platform)}
@@ -268,6 +277,9 @@ export function TeacherClassSessionsPageContent({
                     sessionStatus={nextSession.status}
                     meetingPlatform={effectiveMeetingSettings.platform}
                     meetingLink={effectiveMeetingSettings.link}
+                    sessionStartTime={toIsoStringOrNull(nextSession.startTime)}
+                    sessionEndTime={toIsoStringOrNull(nextSession.endTime)}
+                    academyTimeZone={academyTimeZone}
                     initialJoin={nextSession.teacherJoin}
                     disabledReason={
                       nextSessionJoinWindow?.isVisible
@@ -312,6 +324,7 @@ export function TeacherClassSessionsPageContent({
                 page={page}
                 limit={limit}
                 onPageChange={handlePageChange}
+                academyTimeZone={academyTimeZone}
               />
             </div>
           </details>

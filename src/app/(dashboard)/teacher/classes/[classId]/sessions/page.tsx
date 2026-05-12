@@ -54,6 +54,7 @@ export default async function ClassSessionsPage({
     classId: params.classId,
     page,
     limit,
+    academyTimeZone: session.user.academy?.timezone,
   })
 
   if (!data) {
@@ -69,6 +70,7 @@ export default async function ClassSessionsPage({
       total={data.total}
       page={page}
       limit={limit}
+      academyTimeZone={session.user.academy?.timezone}
     />
   )
 }

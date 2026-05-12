@@ -7,6 +7,7 @@ import {
   isEmailVerificationRequired,
   shouldSkipSubdomainCheck,
 } from "@/lib/runtime-flags"
+import { resolveAcademyTimeZone } from "@/lib/time-zone"
 import { z } from "zod"
 
 const registerSchema = z.object({
@@ -174,6 +175,7 @@ export async function POST(req: NextRequest) {
               name: academyName,
               subdomain: candidateSubdomain,
               contactEmail: normalizedContactEmail,
+              timezone: resolveAcademyTimeZone(null),
             },
             select: {
               id: true,

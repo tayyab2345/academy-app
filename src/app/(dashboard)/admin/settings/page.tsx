@@ -29,6 +29,7 @@ export default async function AdminSettingsPage() {
         logoUrl: true,
         primaryColor: true,
         contactEmail: true,
+        timezone: true,
       },
     }),
     prisma.user.count({

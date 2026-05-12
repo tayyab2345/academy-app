@@ -453,6 +453,7 @@ export default async function ParentDashboardPage() {
     (notification) => !notification.isRead
   ).length
   const academyPrimaryColor = session.user.academy?.primaryColor || "#059669"
+  const academyTimeZone = session.user.academy?.timezone
 
   const childOutstandingTotals = linkedChildren.reduce((map, link) => {
     const totals = buildCurrencyTotals(
@@ -622,6 +623,7 @@ export default async function ParentDashboardPage() {
                                         scheduleStartTime={enrollment.class.scheduleStartTime}
                                         scheduleEndTime={enrollment.class.scheduleEndTime}
                                         scheduleRecurrence={enrollment.class.scheduleRecurrence}
+                                        academyTimeZone={academyTimeZone}
                                         teacherName={
                                           teacher
                                             ? `${teacher.firstName} ${teacher.lastName}`

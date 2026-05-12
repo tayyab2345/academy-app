@@ -21,6 +21,7 @@ declare module "next-auth" {
         contactEmail: string
         primaryColor: string
         logoUrl: string | null
+        timezone: string
         isDeleted: boolean
         deletedAt: string | null
       }
@@ -45,6 +46,7 @@ declare module "next-auth" {
       contactEmail: string
       primaryColor: string
       logoUrl: string | null
+      timezone: string
       isDeleted: boolean
       deletedAt: string | null
     }
@@ -71,6 +73,7 @@ declare module "next-auth/jwt" {
       contactEmail: string
       primaryColor: string
       logoUrl: string | null
+      timezone: string
       isDeleted: boolean
       deletedAt: string | null
     }

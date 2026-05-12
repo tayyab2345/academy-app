@@ -16,18 +16,17 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
+import { TimeZoneAwareSessionTime } from "@/components/sessions/time-zone-aware-session-time"
 import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
 import {
-  formatSessionDate,
-  formatSessionTime,
   getEffectiveSessionMeetingSettings,
   getSessionJoinWindowState,
   SESSION_JOIN_LEAD_MINUTES,
 } from "@/lib/attendance-utils"
 import {
-  formatSessionDayName,
   getJoinOpensMessage,
 } from "@/lib/relevant-session"
+import { toIsoStringOrNull } from "@/lib/date-serialization"
 
 export const metadata: Metadata = {
   title: "My Classes - Teacher - AcademyFlow",
@@ -41,12 +40,15 @@ export default async function TeacherClassesPage() {
     redirect("/login")
   }
 
-  const classes = await getTeacherClassesOverviewData(session.user.id)
+  const academyTimeZone = session.user.academy?.timezone
+  const classes = await getTeacherClassesOverviewData(
+    session.user.id,
+    academyTimeZone
+  )
 
   if (!classes) {
     redirect("/login")
   }
-
   return (
     <div className="space-y-6">
       <div>
@@ -112,6 +114,7 @@ export default async function TeacherClassesPage() {
                         scheduleStartTime={cls.scheduleStartTime}
                         scheduleEndTime={cls.scheduleEndTime}
                         scheduleRecurrence={cls.scheduleRecurrence}
+                        academyTimeZone={academyTimeZone}
                         emptyMessage="No recurring schedule has been configured yet."
                       />
                       <div className="flex items-center justify-between text-sm">
@@ -134,20 +137,24 @@ export default async function TeacherClassesPage() {
                             Today / Next Session
                           </p>
                           <div className="space-y-2">
-                            <p className="text-sm font-medium">
-                              {formatSessionDayName(nextSession.startTime)} -{" "}
-                              {formatSessionDate(new Date(nextSession.startTime))}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {formatSessionTime(new Date(nextSession.startTime))} -{" "}
-                              {formatSessionTime(new Date(nextSession.endTime))}
-                            </p>
+                            <TimeZoneAwareSessionTime
+                              startTime={
+                                toIsoStringOrNull(nextSession.startTime) ||
+                                nextSession.startTime
+                              }
+                              endTime={toIsoStringOrNull(nextSession.endTime)}
+                              academyTimeZone={academyTimeZone}
+                              compact
+                            />
                             {effectiveMeetingSettings ? (
                               <TeacherJoinButton
                                 sessionId={nextSession.id}
                                 sessionStatus={nextSession.status}
                                 meetingPlatform={effectiveMeetingSettings.platform}
                                 meetingLink={effectiveMeetingSettings.link}
+                                sessionStartTime={toIsoStringOrNull(nextSession.startTime)}
+                                sessionEndTime={toIsoStringOrNull(nextSession.endTime)}
+                                academyTimeZone={academyTimeZone}
                                 initialJoin={nextSession.teacherJoin}
                                 disabledReason={
                                   joinWindow?.isVisible

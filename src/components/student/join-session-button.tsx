@@ -13,6 +13,12 @@ import {
   formatSessionTime,
   getSessionJoinStatusBadge,
 } from "@/lib/attendance-utils"
+import { getLiveJoinWindowState } from "@/lib/join-window"
+import {
+  formatTimeOnlyInZone,
+  getReadableTimeZoneLabel,
+  safeResolveBrowserTimeZone,
+} from "@/lib/time-zone-labels"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -31,6 +37,10 @@ interface JoinSessionButtonProps {
   align?: "start" | "end"
   disabledReason?: string | null
   disabledLabel?: string
+  sessionStartTime?: string | null
+  sessionEndTime?: string | null
+  academyTimeZone?: string | null
+  joinLeadMinutes?: number
 }
 
 export function JoinSessionButton({
@@ -44,20 +54,87 @@ export function JoinSessionButton({
   align = "end",
   disabledReason = null,
   disabledLabel = "Join opens soon",
+  sessionStartTime = null,
+  sessionEndTime = null,
+  academyTimeZone = null,
+  joinLeadMinutes = 15,
 }: JoinSessionButtonProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [joinRecord, setJoinRecord] = useState(initialAttendance)
   const [error, setError] = useState<string | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const [browserTimeZone, setBrowserTimeZone] = useState<string | null>(null)
 
   useEffect(() => {
     setJoinRecord(initialAttendance)
   }, [initialAttendance])
 
+  useEffect(() => {
+    setBrowserTimeZone(
+      safeResolveBrowserTimeZone(
+        Intl.DateTimeFormat().resolvedOptions().timeZone
+      )
+    )
+  }, [])
+
+  useEffect(() => {
+    if (!sessionStartTime || !sessionEndTime) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      setNow(new Date())
+    }, 30_000)
+
+    return () => window.clearInterval(interval)
+  }, [sessionEndTime, sessionStartTime])
+
   const hasJoined = !!joinRecord?.joinTime
+  const liveJoinState =
+    sessionStartTime && sessionEndTime
+      ? getLiveJoinWindowState(
+          {
+            startTime: sessionStartTime,
+            endTime: sessionEndTime,
+            status: sessionStatus,
+          },
+          now,
+          joinLeadMinutes
+        )
+      : null
+  const openTimeLabel =
+    liveJoinState?.opensAt && liveJoinState.phase === "before"
+      ? `Join opens at ${formatTimeOnlyInZone(
+          liveJoinState.opensAt,
+          browserTimeZone || undefined
+        )}${
+          browserTimeZone
+            ? ` ${getReadableTimeZoneLabel(browserTimeZone)}`
+            : " your local time"
+        }`
+      : null
+  const effectiveDisabledReason =
+    liveJoinState?.phase === "before"
+      ? openTimeLabel
+      : liveJoinState?.phase === "ended"
+        ? "Class ended"
+        : liveJoinState?.phase === "closed"
+          ? "This session is not open for joining."
+          : disabledReason
+  const effectiveDisabledLabel =
+    liveJoinState?.phase === "before"
+      ? openTimeLabel || disabledLabel
+      : liveJoinState?.phase === "ended"
+        ? "Class ended"
+        : liveJoinState?.phase === "closed"
+          ? "Unavailable"
+          : disabledLabel
   const canJoin =
-    sessionStatus === "scheduled" || sessionStatus === "ongoing"
-  const disabledBySchedule = !!disabledReason && !hasJoined
+    liveJoinState?.canJoin ??
+    (sessionStatus === "scheduled" || sessionStatus === "ongoing")
+  const disabledBySchedule = !!effectiveDisabledReason && !hasJoined
+  const classEnded = liveJoinState?.phase === "ended"
   const joinStatus = useMemo(() => {
     if (!joinRecord?.joinTime) {
       return null
@@ -68,7 +145,7 @@ export function JoinSessionButton({
   const joinBadge = joinStatus ? getSessionJoinStatusBadge(joinStatus) : null
 
   const handleJoin = async () => {
-    if (!canJoin || disabledBySchedule) {
+    if (!canJoin || disabledBySchedule || classEnded) {
       return
     }
 
@@ -127,6 +204,7 @@ export function JoinSessionButton({
         disabled={
           isLoading ||
           disabledBySchedule ||
+          classEnded ||
           !canJoin ||
           (meetingPlatform !== "in_person" && !meetingLink) ||
           (meetingPlatform === "in_person" && hasJoined)
@@ -150,8 +228,10 @@ export function JoinSessionButton({
         ) : (
           <ExternalLink className="mr-2 h-4 w-4" />
         )}
-        {disabledBySchedule && !hasJoined
-          ? disabledLabel
+        {classEnded
+          ? "Class ended"
+          : disabledBySchedule && !hasJoined
+          ? effectiveDisabledLabel
           : hasJoined
           ? meetingPlatform === "in_person"
             ? "Attendance Recorded"
@@ -161,8 +241,8 @@ export function JoinSessionButton({
             : "Join Class"}
       </Button>
 
-      {showMeta && disabledReason && !joinRecord?.joinTime ? (
-        <p className="text-xs text-muted-foreground">{disabledReason}</p>
+      {showMeta && effectiveDisabledReason && !joinRecord?.joinTime ? (
+        <p className="text-xs text-muted-foreground">{effectiveDisabledReason}</p>
       ) : showMeta && joinRecord?.joinTime ? (
         <div
           className={cn(
@@ -174,8 +254,13 @@ export function JoinSessionButton({
             <Badge variant={joinBadge.variant as any}>{joinBadge.label}</Badge>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Joined {formatSessionDate(joinRecord.joinTime)} at{" "}
-            {formatSessionTime(joinRecord.joinTime)}
+            Joined{" "}
+            {formatSessionDate(
+              joinRecord.joinTime,
+              browserTimeZone || academyTimeZone
+            )}{" "}
+            at{" "}
+            {formatSessionTime(joinRecord.joinTime, browserTimeZone || academyTimeZone)}
           </p>
           {(joinRecord.lateMinutes || 0) > 0 ? (
             <p className="text-xs text-yellow-600">

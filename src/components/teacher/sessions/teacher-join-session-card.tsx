@@ -20,6 +20,9 @@ interface TeacherJoinSessionCardProps {
   meetingPlatform: string
   meetingLink: string | null
   initialJoin: TeacherJoinRecord | null
+  sessionStartTime?: string | null
+  sessionEndTime?: string | null
+  academyTimeZone?: string | null
   joinWindowVisible?: boolean
   joinWindowMessage?: string
 }
@@ -30,6 +33,9 @@ export function TeacherJoinSessionCard({
   meetingPlatform,
   meetingLink,
   initialJoin,
+  sessionStartTime = null,
+  sessionEndTime = null,
+  academyTimeZone = null,
   joinWindowVisible = true,
   joinWindowMessage,
 }: TeacherJoinSessionCardProps) {
@@ -81,13 +87,16 @@ export function TeacherJoinSessionCard({
           )}
         </div>
 
-        {joinWindowVisible || initialJoin ? (
+        {joinWindowVisible || initialJoin || (sessionStartTime && sessionEndTime) ? (
           <TeacherJoinButton
             sessionId={sessionId}
             sessionStatus={sessionStatus}
             meetingPlatform={meetingPlatform}
             meetingLink={meetingLink}
             initialJoin={initialJoin}
+            sessionStartTime={sessionStartTime}
+            sessionEndTime={sessionEndTime}
+            academyTimeZone={academyTimeZone}
             showMeta={false}
           />
         ) : null}

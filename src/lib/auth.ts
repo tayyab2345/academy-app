@@ -14,6 +14,7 @@ import {
   normalizeAuthEmail,
   signInWithSupabasePassword,
 } from "./supabase-auth"
+import { resolveAcademyTimeZone } from "./time-zone"
 
 let authDiagnosticsLogged = false
 const ACADEMY_TOKEN_REFRESH_INTERVAL_MS = 5 * 60 * 1000
@@ -90,6 +91,7 @@ export const authOptions: NextAuthOptions = {
                       contactEmail: true,
                       primaryColor: true,
                       logoUrl: true,
+                      timezone: true,
                       isDeleted: true,
                       deletedAt: true,
                     },
@@ -135,6 +137,7 @@ export const authOptions: NextAuthOptions = {
                     contactEmail: true,
                     primaryColor: true,
                     logoUrl: true,
+                    timezone: true,
                     isDeleted: true,
                     deletedAt: true,
                   },
@@ -191,6 +194,7 @@ export const authOptions: NextAuthOptions = {
               contactEmail: user.academy.contactEmail,
               primaryColor: user.academy.primaryColor,
               logoUrl: user.academy.logoUrl,
+              timezone: resolveAcademyTimeZone(user.academy.timezone),
               isDeleted: user.academy.isDeleted,
               deletedAt: user.academy.deletedAt?.toISOString() || null,
             }
@@ -255,6 +259,7 @@ export const authOptions: NextAuthOptions = {
       const shouldRefreshAcademy =
         Boolean(token.academyId) &&
         (!token.academy ||
+          !(token.academy as any)?.timezone ||
           !lastAcademyRefresh ||
           Date.now() - lastAcademyRefresh > ACADEMY_TOKEN_REFRESH_INTERVAL_MS)
 
@@ -269,6 +274,7 @@ export const authOptions: NextAuthOptions = {
               contactEmail: true,
               primaryColor: true,
               logoUrl: true,
+              timezone: true,
               isDeleted: true,
               deletedAt: true,
             },
@@ -277,6 +283,7 @@ export const authOptions: NextAuthOptions = {
           if (academy) {
             token.academy = {
               ...academy,
+              timezone: resolveAcademyTimeZone(academy.timezone),
               deletedAt: academy.deletedAt?.toISOString() || null,
             }
             token.academyRefreshedAt = Date.now()
@@ -307,7 +314,13 @@ export const authOptions: NextAuthOptions = {
           (token.adminPermissionType as "full_admin" | "limited_admin" | null | undefined) ?? null
         session.user.isAcademyOwner = token.isAcademyOwner as boolean
         session.user.academyId = token.academyId as string
-        session.user.academy = token.academy as Session["user"]["academy"]
+        const tokenAcademy = token.academy as
+          | (Session["user"]["academy"] & { timezone?: string | null })
+          | undefined
+        session.user.academy = {
+          ...(tokenAcademy as Session["user"]["academy"]),
+          timezone: resolveAcademyTimeZone(tokenAcademy?.timezone),
+        }
       }
       
       return session

@@ -9,7 +9,6 @@ import { prisma } from "@/lib/prisma"
 import {
   ArrowLeft,
   Calendar,
-  Clock,
   MapPin,
   Users,
   Video,
@@ -18,6 +17,7 @@ import {
 import { JoinSessionButton } from "@/components/student/join-session-button"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
 import { CourseSyllabusPanel } from "@/components/courses/course-syllabus-panel"
+import { TimeZoneAwareSessionTime } from "@/components/sessions/time-zone-aware-session-time"
 import { MeetingLinkButton } from "@/components/sessions/meeting-link-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -173,7 +173,12 @@ export default async function StudentClassDetailPage({
     notFound()
   }
 
-  const relevantSession = getRelevantClassSession(classData.sessions)
+  const academyTimeZone = session.user.academy?.timezone
+  const relevantSession = getRelevantClassSession(
+    classData.sessions,
+    new Date(),
+    academyTimeZone
+  )
   const upcomingSessions = relevantSession ? [relevantSession] : []
   const pastSessions = classData.sessions
     .filter(
@@ -227,6 +232,7 @@ export default async function StudentClassDetailPage({
                   scheduleStartTime={classData.scheduleStartTime}
                   scheduleEndTime={classData.scheduleEndTime}
                   scheduleRecurrence={classData.scheduleRecurrence}
+                  academyTimeZone={academyTimeZone}
                   teacherName={
                     classData.teachers[0]
                       ? `${classData.teachers[0].teacherProfile.user.firstName} ${classData.teachers[0].teacherProfile.user.lastName}`
@@ -286,6 +292,9 @@ export default async function StudentClassDetailPage({
                             sessionStatus={nextSession.status}
                             meetingPlatform={effectiveMeetingSettings.platform}
                             meetingLink={effectiveMeetingSettings.link}
+                            sessionStartTime={toIsoStringOrNull(nextSession.startTime)}
+                            sessionEndTime={toIsoStringOrNull(nextSession.endTime)}
+                            academyTimeZone={academyTimeZone}
                             initialAttendance={
                               studentAttendance
                                 ? {
@@ -428,16 +437,16 @@ export default async function StudentClassDetailPage({
                               <Calendar className="h-3 w-3" />
                               {formatSessionDayName(sessionItem.startTime)}
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {formatSessionDate(new Date(sessionItem.startTime))}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatSessionTime(new Date(sessionItem.startTime))} -{" "}
-                              {formatSessionTime(new Date(sessionItem.endTime))}
-                            </span>
                           </div>
+                          <TimeZoneAwareSessionTime
+                            startTime={
+                              toIsoStringOrNull(sessionItem.startTime) ||
+                              sessionItem.startTime
+                            }
+                            endTime={toIsoStringOrNull(sessionItem.endTime)}
+                            academyTimeZone={academyTimeZone}
+                            compact
+                          />
                           {classData.teachers[0] ? (
                             <p className="text-sm text-muted-foreground">
                               Teacher:{" "}
@@ -472,8 +481,15 @@ export default async function StudentClassDetailPage({
                             <div className="space-y-1 text-sm text-muted-foreground">
                               <p>
                                 Joined{" "}
-                                {formatSessionDate(studentAttendance.joinTime)} at{" "}
-                                {formatSessionTime(studentAttendance.joinTime)}
+                                {formatSessionDate(
+                                  studentAttendance.joinTime,
+                                  academyTimeZone
+                                )}{" "}
+                                at{" "}
+                                {formatSessionTime(
+                                  studentAttendance.joinTime,
+                                  academyTimeZone
+                                )}
                               </p>
                               <p>
                                 {joinStatus}
@@ -489,6 +505,9 @@ export default async function StudentClassDetailPage({
                           sessionStatus={sessionItem.status}
                           meetingPlatform={effectiveMeetingSettings.platform}
                           meetingLink={effectiveMeetingSettings.link}
+                          sessionStartTime={toIsoStringOrNull(sessionItem.startTime)}
+                          sessionEndTime={toIsoStringOrNull(sessionItem.endTime)}
+                          academyTimeZone={academyTimeZone}
                             initialAttendance={
                               studentAttendance
                                 ? {
@@ -538,13 +557,23 @@ export default async function StudentClassDetailPage({
                           {sessionItem.title || "Class Session"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {formatSessionDate(sessionItem.startTime)} at{" "}
-                          {formatSessionTime(sessionItem.startTime)}
+                          {formatSessionDate(
+                            sessionItem.startTime,
+                            academyTimeZone
+                          )}{" "}
+                          at{" "}
+                          {formatSessionTime(
+                            sessionItem.startTime,
+                            academyTimeZone
+                          )}
                         </p>
                         {sessionItem.attendances[0]?.joinTime ? (
                           <p className="mt-1 text-xs text-muted-foreground">
                             Joined{" "}
-                            {formatSessionTime(sessionItem.attendances[0].joinTime)}
+                            {formatSessionTime(
+                              sessionItem.attendances[0].joinTime,
+                              academyTimeZone
+                            )}
                             {(sessionItem.attendances[0].lateMinutes || 0) > 0
                               ? ` | ${sessionItem.attendances[0].lateMinutes} minute${sessionItem.attendances[0].lateMinutes === 1 ? "" : "s"} late`
                               : " | on time"}

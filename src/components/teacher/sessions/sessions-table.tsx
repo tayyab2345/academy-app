@@ -5,7 +5,6 @@ import {
   Eye,
   Users,
   Calendar,
-  Clock,
 } from "lucide-react"
 
 import {
@@ -23,14 +22,12 @@ import {
   CardContent,
 } from "@/components/ui/card"
 import {
-  formatSessionDate,
-  formatSessionTime,
   getEffectiveSessionMeetingSettings,
-  getSessionJoinWindowState,
   getSessionStatusBadge,
   SESSION_JOIN_LEAD_MINUTES,
   isSessionActive,
 } from "@/lib/attendance-utils"
+import { TimeZoneAwareSessionTime } from "@/components/sessions/time-zone-aware-session-time"
 import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
 
 interface Session {
@@ -60,6 +57,7 @@ interface SessionsTableProps {
   page: number
   limit: number
   onPageChange: (page: number) => void
+  academyTimeZone?: string | null
 }
 
 export function SessionsTable({
@@ -70,6 +68,7 @@ export function SessionsTable({
   page,
   limit,
   onPageChange,
+  academyTimeZone,
 }: SessionsTableProps) {
   const totalPages = Math.ceil(total / limit)
 
@@ -84,12 +83,6 @@ export function SessionsTable({
   }
 
   const renderJoinAction = (session: Session) => {
-    const sessionData = {
-      startTime: new Date(session.startTime),
-      endTime: new Date(session.endTime),
-      status: session.status,
-    }
-    const joinWindow = getSessionJoinWindowState(sessionData)
     const effectiveMeetingSettings = getEffectiveSessionMeetingSettings({
       sessionMeetingPlatform: session.meetingPlatform,
       sessionMeetingLink: session.meetingLink,
@@ -97,25 +90,21 @@ export function SessionsTable({
       classMeetingLink,
     })
 
-    if (joinWindow.isVisible) {
-      return (
-        <TeacherJoinButton
-          sessionId={session.id}
-          sessionStatus={session.status}
-          meetingPlatform={effectiveMeetingSettings.platform}
-          meetingLink={effectiveMeetingSettings.link}
-          initialJoin={session.teacherJoin}
-          showMeta={false}
-          align="start"
-          className="w-full sm:w-auto"
-        />
-      )
-    }
-
     return (
-      <p className="text-xs leading-5 text-muted-foreground">
-        Join button appears {SESSION_JOIN_LEAD_MINUTES} minutes before start.
-      </p>
+      <TeacherJoinButton
+        sessionId={session.id}
+        sessionStatus={session.status}
+        meetingPlatform={effectiveMeetingSettings.platform}
+        meetingLink={effectiveMeetingSettings.link}
+        initialJoin={session.teacherJoin}
+        sessionStartTime={session.startTime}
+        sessionEndTime={session.endTime}
+        academyTimeZone={academyTimeZone}
+        showMeta={false}
+        align="start"
+        className="w-full sm:w-auto"
+        disabledLabel={`Join opens ${SESSION_JOIN_LEAD_MINUTES} min before`}
+      />
     )
   }
 
@@ -143,19 +132,18 @@ export function SessionsTable({
                     <div className="space-y-2">
                       <p className="text-base font-semibold leading-tight">
                         {session.title ||
-                          `Session ${formatSessionDate(new Date(session.sessionDate))}`}
+                          "Class Session"}
                       </p>
                       <div className="space-y-1 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 shrink-0" />
-                          <span>{formatSessionDate(new Date(session.sessionDate))}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 shrink-0" />
-                          <span>
-                            {formatSessionTime(new Date(session.startTime))} -{" "}
-                            {formatSessionTime(new Date(session.endTime))}
-                          </span>
+                          <TimeZoneAwareSessionTime
+                            startTime={session.startTime}
+                            endTime={session.endTime}
+                            academyTimeZone={academyTimeZone}
+                            showIcon={false}
+                            compact
+                          />
                         </div>
                       </div>
                     </div>
@@ -224,19 +212,20 @@ export function SessionsTable({
                         <TableCell>
                           <p className="font-medium">
                             {session.title ||
-                              `Session ${formatSessionDate(new Date(session.sessionDate))}`}
+                              "Class Session"}
                           </p>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <div className="flex items-center gap-1 text-sm">
+                            <div className="flex items-start gap-1 text-sm">
                               <Calendar className="h-3 w-3" />
-                              {formatSessionDate(new Date(session.sessionDate))}
-                            </div>
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                              <Clock className="h-3 w-3" />
-                              {formatSessionTime(new Date(session.startTime))} -{" "}
-                              {formatSessionTime(new Date(session.endTime))}
+                              <TimeZoneAwareSessionTime
+                                startTime={session.startTime}
+                                endTime={session.endTime}
+                                academyTimeZone={academyTimeZone}
+                                showIcon={false}
+                                compact
+                              />
                             </div>
                           </div>
                         </TableCell>

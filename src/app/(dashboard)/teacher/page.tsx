@@ -18,20 +18,18 @@ import { syncRecurringSessionsForClasses } from "@/lib/class-session-schedule"
 import { toIsoStringOrNull } from "@/lib/date-serialization"
 import { prisma } from "@/lib/prisma"
 import {
-  formatSessionDayName,
   getJoinOpensMessage,
   getRelevantClassSession,
   getStartOfLocalDay,
 } from "@/lib/relevant-session"
 import {
-  formatSessionDate,
-  formatSessionTime,
   getEffectiveSessionMeetingSettings,
   getSessionJoinWindowState,
   getSessionStatusBadge,
   SESSION_JOIN_LEAD_MINUTES,
 } from "@/lib/attendance-utils"
 import { ClassScheduleSummary } from "@/components/classes/class-schedule-summary"
+import { TimeZoneAwareSessionTime } from "@/components/sessions/time-zone-aware-session-time"
 import { ReportStatusBadge } from "@/components/reports/report-status-badge"
 import { TeacherJoinButton } from "@/components/teacher/sessions/teacher-join-button"
 import { Badge, type BadgeProps } from "@/components/ui/badge"
@@ -44,7 +42,10 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-async function getTeacherDashboardData(userId: string) {
+async function getTeacherDashboardData(
+  userId: string,
+  academyTimeZone?: string | null
+) {
   return unstable_cache(
     async () => {
       const teacherProfile = await prisma.teacherProfile.findUnique({
@@ -78,7 +79,7 @@ async function getTeacherDashboardData(userId: string) {
       )
 
       const now = new Date()
-      const todayStart = getStartOfLocalDay(now)
+      const todayStart = getStartOfLocalDay(now, academyTimeZone)
       const startOfToday = new Date(now)
       startOfToday.setHours(0, 0, 0, 0)
       const endOfToday = new Date(startOfToday)
@@ -254,7 +255,11 @@ async function getTeacherDashboardData(userId: string) {
 
       const upcomingSessions = assignedClasses
         .flatMap((assignment) => {
-          const nextSession = getRelevantClassSession(assignment.class.sessions, now)
+          const nextSession = getRelevantClassSession(
+            assignment.class.sessions,
+            now,
+            academyTimeZone
+          )
 
           if (!nextSession) {
             return []
@@ -287,7 +292,7 @@ async function getTeacherDashboardData(userId: string) {
         recentReports,
       }
     },
-    ["teacher-dashboard", userId],
+    ["teacher-dashboard", userId, academyTimeZone || "default"],
     {
       revalidate: 60,
     }
@@ -301,7 +306,11 @@ export default async function TeacherDashboardPage() {
     redirect("/login")
   }
 
-  const dashboardData = await getTeacherDashboardData(session.user.id)
+  const academyTimeZone = session.user.academy?.timezone
+  const dashboardData = await getTeacherDashboardData(
+    session.user.id,
+    academyTimeZone
+  )
 
   if (!dashboardData) {
     redirect("/login")
@@ -428,7 +437,9 @@ export default async function TeacherDashboardPage() {
               <div className="space-y-3">
                 {assignedClasses.slice(0, 4).map((assignment) => {
                   const nextSession = getRelevantClassSession(
-                    assignment.class.sessions
+                    assignment.class.sessions,
+                    new Date(),
+                    academyTimeZone
                   )
                   const joinWindow = nextSession
                     ? getSessionJoinWindowState({
@@ -481,11 +492,23 @@ export default async function TeacherDashboardPage() {
                               {assignment.class.section ? ` - Section ${assignment.class.section}` : ""}
                               {assignment.class.academicYear ? ` - ${assignment.class.academicYear}` : ""}
                             </p>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {nextSession
-                                ? `${formatSessionDayName(nextSession.startTime)} session: ${formatSessionDate(new Date(nextSession.startTime))} at ${formatSessionTime(new Date(nextSession.startTime))}`
-                                : "No upcoming sessions scheduled"}
-                            </p>
+                            {nextSession ? (
+                              <TimeZoneAwareSessionTime
+                                startTime={
+                                  toIsoStringOrNull(nextSession.startTime) ||
+                                  nextSession.startTime
+                                }
+                                endTime={toIsoStringOrNull(nextSession.endTime)}
+                                academyTimeZone={academyTimeZone}
+                                className="mt-2 text-xs"
+                                compact
+                                showIcon={false}
+                              />
+                            ) : (
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                No upcoming sessions scheduled
+                              </p>
+                            )}
                             {nextSession ? (
                               joinWindow?.isVisible ? (
                                 <p className="mt-2 text-xs font-medium text-emerald-600">
@@ -505,6 +528,7 @@ export default async function TeacherDashboardPage() {
                                 scheduleStartTime={assignment.class.scheduleStartTime}
                                 scheduleEndTime={assignment.class.scheduleEndTime}
                                 scheduleRecurrence={assignment.class.scheduleRecurrence}
+                                academyTimeZone={academyTimeZone}
                                 emptyMessage="No recurring schedule has been configured yet."
                               />
                             </div>
@@ -517,6 +541,9 @@ export default async function TeacherDashboardPage() {
                               sessionStatus={nextSession.status}
                               meetingPlatform={effectiveMeetingSettings.platform}
                               meetingLink={effectiveMeetingSettings.link}
+                              sessionStartTime={toIsoStringOrNull(nextSession.startTime)}
+                              sessionEndTime={toIsoStringOrNull(nextSession.endTime)}
+                              academyTimeZone={academyTimeZone}
                               initialJoin={initialJoin}
                               align="start"
                               showMeta={false}
@@ -623,12 +650,17 @@ export default async function TeacherDashboardPage() {
                           <p className="mt-1 text-xs text-muted-foreground">
                             {upcomingSession.class.course.code}: {upcomingSession.class.name}
                           </p>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {formatSessionDayName(upcomingSession.startTime)} -{" "}
-                            {formatSessionDate(new Date(upcomingSession.startTime))} -{" "}
-                            {formatSessionTime(new Date(upcomingSession.startTime))} -{" "}
-                            {formatSessionTime(new Date(upcomingSession.endTime))}
-                          </p>
+                          <TimeZoneAwareSessionTime
+                            startTime={
+                              toIsoStringOrNull(upcomingSession.startTime) ||
+                              upcomingSession.startTime
+                            }
+                            endTime={toIsoStringOrNull(upcomingSession.endTime)}
+                            academyTimeZone={academyTimeZone}
+                            className="mt-2 text-xs"
+                            compact
+                            showIcon={false}
+                          />
                           {joinWindow.isVisible ? (
                             <p className="mt-2 text-xs font-medium text-emerald-600">
                               {joinWindow.isLive
@@ -648,6 +680,9 @@ export default async function TeacherDashboardPage() {
                             sessionStatus={upcomingSession.status}
                             meetingPlatform={effectiveMeetingSettings.platform}
                             meetingLink={effectiveMeetingSettings.link}
+                            sessionStartTime={toIsoStringOrNull(upcomingSession.startTime)}
+                            sessionEndTime={toIsoStringOrNull(upcomingSession.endTime)}
+                            academyTimeZone={academyTimeZone}
                             initialJoin={initialJoin}
                             align="start"
                             showMeta={false}

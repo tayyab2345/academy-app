@@ -8,10 +8,12 @@ import {
   sortClassScheduleDays,
   type ClassScheduleShape,
 } from "@/lib/class-schedule"
+import { getReadableTimeZoneLabel } from "@/lib/time-zone-labels"
 import { cn } from "@/lib/utils"
 
 interface ClassScheduleSummaryProps extends ClassScheduleShape {
   teacherName?: string | null
+  academyTimeZone?: string | null
   emptyMessage?: string
   variant?: "compact" | "detailed"
   className?: string
@@ -23,6 +25,7 @@ export function ClassScheduleSummary({
   scheduleEndTime,
   scheduleRecurrence,
   teacherName,
+  academyTimeZone,
   emptyMessage = "Recurring schedule not configured yet.",
   variant = "compact",
   className,
@@ -60,6 +63,7 @@ export function ClassScheduleSummary({
     scheduleStartTime,
     scheduleEndTime
   )
+  const timeZoneLabel = getReadableTimeZoneLabel(academyTimeZone)
   const recurrenceLabel = getClassRecurrenceLabel(scheduleRecurrence)
 
   if (variant === "compact") {
@@ -76,7 +80,7 @@ export function ClassScheduleSummary({
           {timeRange ? (
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {timeRange}
+              Academy time: {timeRange} ({timeZoneLabel})
             </span>
           ) : null}
           {teacherName ? (
@@ -112,7 +116,10 @@ export function ClassScheduleSummary({
             <Clock className="h-4 w-4" />
             Time
           </div>
-          <p className="text-sm font-medium">{timeRange}</p>
+          <p className="text-sm font-medium">
+            Academy time: {timeRange}
+          </p>
+          <p className="text-xs text-muted-foreground">{timeZoneLabel}</p>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Repeat className="h-4 w-4" />
             <span>{recurrenceLabel}</span>
